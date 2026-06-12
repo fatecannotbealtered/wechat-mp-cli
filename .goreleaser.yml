@@ -1,0 +1,57 @@
+version: 2
+
+project_name: wechat-mp-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/wechat-mp-cli
+    binary: wechat-mp-cli
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/fatecannotbealtered/wechat-mp-cli/cmd.version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Windows ARM64 is not built natively; prepare-npm-platform-packages.js
+    # reuses the amd64 binary, which runs via Windows x64 emulation on ARM.
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    wrap_in_directory: false
+    # Ship CLI binary only — skills install via npx.
+    files:
+      - none*
+
+checksum:
+  name_template: checksums.txt
+
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - "sign-blob"
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+
+release:
+  # Idempotent re-tagging: overwrite artifacts if the release already exists.
+  replace_existing_artifacts: true

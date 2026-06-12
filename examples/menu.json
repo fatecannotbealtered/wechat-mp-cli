@@ -1,0 +1,19 @@
+{
+  "button": [
+    {
+      "type": "view",
+      "name": "Website",
+      "url": "https://example.com"
+    },
+    {
+      "name": "More",
+      "sub_button": [
+        {
+          "type": "click",
+          "name": "About",
+          "key": "ABOUT"
+        }
+      ]
+    }
+  ]
+}
