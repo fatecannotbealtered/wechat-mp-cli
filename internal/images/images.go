@@ -255,6 +255,6 @@ func EncodePNG(path string, img image.Image) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return png.Encode(file, img)
 }

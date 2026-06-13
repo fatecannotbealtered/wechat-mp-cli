@@ -236,8 +236,8 @@ func inferTitleFromHTML(value string) string {
 }
 
 func stripMarkdownInline(value string) string {
-	value = regexp.MustCompile("!\\[([^\\]]*)\\]\\(([^)]+)\\)").ReplaceAllString(value, "$1")
-	value = regexp.MustCompile("\\[([^\\]]+)\\]\\(([^)]+)\\)").ReplaceAllString(value, "$1")
+	value = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`).ReplaceAllString(value, "$1")
+	value = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`).ReplaceAllString(value, "$1")
 	value = strings.ReplaceAll(value, "`", "")
 	value = strings.ReplaceAll(value, "*", "")
 	value = strings.ReplaceAll(value, "_", "")

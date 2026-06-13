@@ -201,9 +201,11 @@ func handleError(err error) error {
 	}
 	var apiErr *mpapi.APIError
 	if errors.As(err, &apiErr) {
-		code := output.ErrServer
-		exit := ExitRetryable
-		retryable := true
+		// Defaults double as the no-match fallthrough so the initial values are
+		// read, not dead-assigned.
+		code := output.ErrValidation
+		exit := ExitBadArgs
+		retryable := false
 		switch {
 		case apiErr.StatusCode == 401 || apiErr.ErrCode == 40001 || apiErr.ErrCode == 40014:
 			code, exit, retryable = output.ErrAuth, ExitAuth, false
@@ -215,8 +217,6 @@ func handleError(err error) error {
 			code, exit, retryable = output.ErrRateLimited, ExitRetryable, true
 		case apiErr.StatusCode >= 500:
 			code, exit, retryable = output.ErrServer, ExitRetryable, true
-		default:
-			code, exit, retryable = output.ErrValidation, ExitBadArgs, false
 		}
 		return fail(exit, code, apiErr.Error(), retryable)
 	}
@@ -297,9 +297,6 @@ func required(value, name string) error {
 	return nil
 }
 
-func homeConfigPath() string {
-	return config.FilePath()
-}
 
 func envOrFlagSecret(secret, secretEnv string) string {
 	if strings.TrimSpace(secret) != "" {

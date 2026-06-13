@@ -5,10 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-06-14
+
+First stable release: recorded live smoke against the real WeChat Official Account API (`docs/LIVE-SMOKE-EVIDENCE.md`); `release_readiness` is `stable` with `live_smoke_status: verified`.
 
 ### Added
 
+- Recorded live smoke against the real WeChat API (2026-06-14): `stable_token` lifecycle, asset/draft/menu reads, the `--dangerous` T2 write gate, and a real temporary-material upload through the dry-run/confirm chain.
 - Initial Go implementation for the AI-native WeChat Official Account CLI.
 - Self-description commands: `context`, `doctor`, `reference`, `changelog`, and `update --check`.
 - Local account configuration with encrypted AppSecret storage and environment variable overrides.

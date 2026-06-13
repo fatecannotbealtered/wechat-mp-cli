@@ -77,7 +77,7 @@ func Text(format string, args ...any) {
 	if Quiet {
 		return
 	}
-	fmt.Fprintf(os.Stdout, format+"\n", args...)
+	_, _ = fmt.Fprintf(os.Stdout, format+"\n", args...)
 }
 
 func Error(format string, args ...any) {
@@ -105,5 +105,5 @@ func printEnvelope(env Envelope) {
 		fmt.Fprintf(os.Stderr, "failed to encode JSON output: %v\n", err)
 		return
 	}
-	fmt.Fprintln(os.Stdout, string(data))
+	_, _ = fmt.Fprintln(os.Stdout, string(data))
 }
