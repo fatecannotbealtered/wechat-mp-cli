@@ -180,9 +180,13 @@ func printData(data any) error {
 }
 
 func fail(exitCode int, code, message string, retryable bool) error {
+	return failWithDetails(exitCode, code, message, nil, retryable)
+}
+
+func failWithDetails(exitCode int, code, message string, details any, retryable bool) error {
 	setExitCode(exitCode)
 	if jsonMode {
-		output.PrintErrorJSON(code, message, nil, retryable)
+		output.PrintErrorJSON(code, message, details, retryable)
 	} else {
 		output.Error("%s: %s", code, message)
 	}
@@ -201,26 +205,48 @@ func handleError(err error) error {
 	}
 	var apiErr *mpapi.APIError
 	if errors.As(err, &apiErr) {
-		// Defaults double as the no-match fallthrough so the initial values are
-		// read, not dead-assigned.
-		code := output.ErrValidation
-		exit := ExitBadArgs
-		retryable := false
-		switch {
-		case apiErr.StatusCode == 401 || apiErr.ErrCode == 40001 || apiErr.ErrCode == 40014:
-			code, exit, retryable = output.ErrAuth, ExitAuth, false
-		case apiErr.StatusCode == 403 || apiErr.ErrCode == 48001:
-			code, exit, retryable = output.ErrForbidden, ExitAuth, false
-		case apiErr.StatusCode == 404:
-			code, exit, retryable = output.ErrNotFound, ExitNotFound, false
-		case apiErr.StatusCode == 429 || apiErr.ErrCode == 45009:
-			code, exit, retryable = output.ErrRateLimited, ExitRetryable, true
-		case apiErr.StatusCode >= 500:
-			code, exit, retryable = output.ErrServer, ExitRetryable, true
-		}
-		return fail(exit, code, apiErr.Error(), retryable)
+		code, exit, retryable, details := classifyAPIError(apiErr)
+		return failWithDetails(exit, code, apiErr.Error(), details, retryable)
 	}
 	return fail(ExitError, output.ErrNetwork, err.Error(), true)
+}
+
+// classifyAPIError maps a WeChat APIError onto the error taxonomy. WeChat returns
+// HTTP 200 with a business `errcode` for most failures, so the specific errcode
+// cases are checked before the HTTP-status cases. Returns the error code, exit
+// code, retryability, and optional details (e.g. an actionable hint).
+func classifyAPIError(apiErr *mpapi.APIError) (code string, exit int, retryable bool, details any) {
+	// Defaults double as the no-match fallthrough so the initial values are read.
+	code = output.ErrValidation
+	exit = ExitBadArgs
+	switch {
+	// IP not in allowlist — the entire remote/proxy feature exists to recover
+	// from this, so hand the agent the actionable route, not a bare message.
+	case apiErr.ErrCode == 40164:
+		code, exit, retryable = output.ErrForbidden, ExitAuth, false
+		details = map[string]any{
+			"errcode": 40164,
+			"hint":    "Caller IP is not in the Official Account IP allowlist. Route requests through an allowlisted egress: 'wechat-mp-cli remote ssh-command ...' or 'wechat-mp-cli setup proxy set ...'.",
+		}
+	// access_token expired — a refresh fixes it, so this is retryable auth.
+	case apiErr.ErrCode == 42001:
+		code, exit, retryable = output.ErrAuth, ExitAuth, true
+	// bad/expired media_id (40007) or invalid menu (41030) — the referenced
+	// resource does not exist.
+	case apiErr.ErrCode == 40007 || apiErr.ErrCode == 41030:
+		code, exit, retryable = output.ErrNotFound, ExitNotFound, false
+	case apiErr.StatusCode == 401 || apiErr.ErrCode == 40001 || apiErr.ErrCode == 40014:
+		code, exit, retryable = output.ErrAuth, ExitAuth, false
+	case apiErr.StatusCode == 403 || apiErr.ErrCode == 48001:
+		code, exit, retryable = output.ErrForbidden, ExitAuth, false
+	case apiErr.StatusCode == 404:
+		code, exit, retryable = output.ErrNotFound, ExitNotFound, false
+	case apiErr.StatusCode == 429 || apiErr.ErrCode == 45009:
+		code, exit, retryable = output.ErrRateLimited, ExitRetryable, true
+	case apiErr.StatusCode >= 500:
+		code, exit, retryable = output.ErrServer, ExitRetryable, true
+	}
+	return code, exit, retryable, details
 }
 
 func loadConfig() (*config.Config, error) {

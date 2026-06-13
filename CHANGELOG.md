@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Expanded WeChat `errcode` mapping so agents get an accurate `error.code` + `retryable`: `40164` (IP not in allowlist) → `E_FORBIDDEN` with an actionable hint pointing at `remote ssh-command` / `setup proxy set` (the recovery path the proxy feature exists for); `42001` (access_token expired) → `E_AUTH` retryable; `40007`/`41030` (bad media_id / invalid menu) → `E_NOT_FOUND`.
+
+### Fixed
+
+- `changelog` now reads CHANGELOG.md embedded into the binary (`go:embed`), so it returns real content regardless of the working directory the agent runs the binary from; previously it read `./CHANGELOG.md` from the CWD and fell back to a stub everywhere else.
+
 ## [1.0.0] - 2026-06-14
 
 First stable release: recorded live smoke against the real WeChat Official Account API (`docs/LIVE-SMOKE-EVIDENCE.md`); `release_readiness` is `stable` with `live_smoke_status: verified`.
