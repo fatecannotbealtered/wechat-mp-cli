@@ -297,7 +297,6 @@ func required(value, name string) error {
 	return nil
 }
 
-
 func envOrFlagSecret(secret, secretEnv string) string {
 	if strings.TrimSpace(secret) != "" {
 		return strings.TrimSpace(secret)
