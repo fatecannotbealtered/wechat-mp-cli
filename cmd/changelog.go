@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"os"
 	"strings"
 
+	project "github.com/fatecannotbealtered/wechat-mp-cli"
 	"github.com/spf13/cobra"
 )
 
@@ -14,16 +14,11 @@ var changelogCmd = readCommand(&cobra.Command{
 	Short: "Print changelog entries",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		data, err := os.ReadFile("CHANGELOG.md")
-		if err != nil {
-			return printData(map[string]any{
-				"since":   changelogSince,
-				"entries": []string{"0.1.0: Initial WeChat Official Account CLI scaffold."},
-			})
-		}
+		// CHANGELOG.md is embedded into the binary, so this works regardless of
+		// the directory the agent runs the binary from.
 		return printData(map[string]any{
 			"since": changelogSince,
-			"text":  strings.TrimSpace(string(data)),
+			"text":  strings.TrimSpace(project.ChangelogMarkdown),
 		})
 	},
 }, "changelog")
