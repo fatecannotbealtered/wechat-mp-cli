@@ -211,6 +211,17 @@ func handleError(err error) error {
 	return fail(ExitError, output.ErrNetwork, err.Error(), true)
 }
 
+// classifyCallError maps any client error (a WeChat APIError or a transport
+// error) onto the {code, exit, retryable} taxonomy without printing. Batch loops
+// use it to record per-item errors while the command keeps running (§15.5).
+func classifyCallError(err error) (code string, exit int, retryable bool, details any) {
+	var apiErr *mpapi.APIError
+	if errors.As(err, &apiErr) {
+		return classifyAPIError(apiErr)
+	}
+	return output.ErrNetwork, ExitError, true, nil
+}
+
 // classifyAPIError maps a WeChat APIError onto the error taxonomy. WeChat returns
 // HTTP 200 with a business `errcode` for most failures, so the specific errcode
 // cases are checked before the HTTP-status cases. Returns the error code, exit
