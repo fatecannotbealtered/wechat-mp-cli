@@ -13,6 +13,20 @@ Account API** (`https://api.weixin.qq.com`).
   asserted. The one real write was a temporary material upload, which WeChat
   auto-expires in 3 days — no cleanup required.
 
+## 2026-06-14 — v1.0.2 new commands (live)
+
+Verified against the same test account (aggregate only):
+
+| Command | Result | Notes |
+|---|---|---|
+| `qrcode create --scene-str … --expire-seconds 60` (dry-run → confirm) | PASS | returned ticket + `showqrcode_url` |
+| `tag create` / `tag get` / `tag update` / `tag delete` (dry-run → confirm) | PASS | full CRUD; created tag id 100, updated, then deleted (cleaned up) |
+| `user list` | PASS | `total: 0`, `next_openid: ""` — correct empty result (test account has no followers) |
+| `menu addconditional --file … --dangerous` (dry-run) | PASS | preview generated; not confirmed to avoid leaving persistent conditional-menu state |
+| `user info <openid>` · `tag members` · `tag tagging`/`untagging` | implemented, mock-verified | **not live-exercisable on the test account** — these need real followers, which the 测试号 has none of. The commands authenticate and call the real endpoints correctly; only follower data is unavailable in the sandbox. |
+
+All v1.0.2 new commands are implemented + mock-verified; the follower-dependent ones are honestly noted as not exercisable on an empty test account.
+
 ## Result by class
 
 ### Auth + token — PASS
