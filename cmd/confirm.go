@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"time"
 
 	"github.com/fatecannotbealtered/wechat-mp-cli/internal/confirm"
 	"github.com/fatecannotbealtered/wechat-mp-cli/internal/output"
@@ -60,5 +61,15 @@ func confirmWrite(operation string, payload any, preview any) (bool, error) {
 		}
 		return false, fail(ExitConfirm, output.ErrConfirmationRequired, msg, false)
 	}
+	// Single-use: a valid token may only drive one write. A replay (e.g. an
+	// agent retrying a write that timed out) is rejected so the side effect is
+	// never applied twice; the agent must re-run --dry-run to see current state.
+	now := time.Now()
+	if confirm.IsConsumed(confirmFlag, now) {
+		return false, fail(ExitConflict, output.ErrConflict,
+			"confirm token already used; the operation may have completed — re-run --dry-run to see current state", false)
+	}
+	// Mark BEFORE the write executes so a crash mid-write still rejects the replay.
+	confirm.MarkConsumed(confirmFlag, now)
 	return true, nil
 }
