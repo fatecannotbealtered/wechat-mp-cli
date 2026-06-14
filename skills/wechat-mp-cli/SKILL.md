@@ -56,6 +56,7 @@ Rules:
 - Reuse the same operation arguments from dry-run.
 - If the confirm token is missing, expired, or mismatched, run dry-run again.
 - Do not invent or edit confirm tokens.
+- Confirm tokens are single-use: each token may drive exactly one write. A replay (e.g. retrying a write that timed out) fails with `E_CONFLICT` — re-run `--dry-run` to see current state instead of re-sending the old token. WeChat exposes no reliable upstream resource version, so single-use IS the safe-retry mechanism here.
 - Stop and ask the user before confirming `publish submit`, deleting drafts, changing credentials, or widening the target account.
 
 ## Common Workflows
