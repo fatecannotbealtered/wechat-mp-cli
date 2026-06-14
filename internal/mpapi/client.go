@@ -461,6 +461,89 @@ func (c *Client) DeleteMenu(ctx context.Context, accessToken string) (map[string
 	return out, nil
 }
 
+// AddConditionalMenu creates a personalized (conditional) menu via
+// /cgi-bin/menu/addconditional. The payload carries button[] plus a matchrule
+// object, so it is passed through as raw JSON like CreateMenu.
+func (c *Client) AddConditionalMenu(ctx context.Context, accessToken string, menu json.RawMessage) (map[string]any, error) {
+	var out map[string]any
+	if err := c.postJSONRaw(ctx, accessToken, "/cgi-bin/menu/addconditional", menu, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreateQRCode creates a QR code ticket via /cgi-bin/qrcode/create. payload
+// selects the action (temporary QR_SCENE/QR_STR_SCENE vs permanent
+// QR_LIMIT_SCENE/QR_LIMIT_STR_SCENE) and scene id; the response carries the
+// ticket, expiry, and the encoded url.
+func (c *Client) CreateQRCode(ctx context.Context, accessToken string, payload map[string]any) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/qrcode/create", payload)
+}
+
+// GetUserInfo fetches a single follower profile via /cgi-bin/user/info. The
+// nickname/remark fields it returns are user-controlled and must be tagged
+// _untrusted by the caller.
+func (c *Client) GetUserInfo(ctx context.Context, accessToken, openID, lang string) (map[string]any, error) {
+	values := url.Values{}
+	values.Set("openid", openID)
+	if lang != "" {
+		values.Set("lang", lang)
+	}
+	return c.getJSON(ctx, accessToken, "/cgi-bin/user/info", values)
+}
+
+// ListUsers fetches a page of follower openids via /cgi-bin/user/get. nextOpenID
+// is the cursor; an empty value starts from the first follower.
+func (c *Client) ListUsers(ctx context.Context, accessToken, nextOpenID string) (map[string]any, error) {
+	values := url.Values{}
+	if nextOpenID != "" {
+		values.Set("next_openid", nextOpenID)
+	}
+	return c.getJSON(ctx, accessToken, "/cgi-bin/user/get", values)
+}
+
+// CreateTag creates a follower tag via /cgi-bin/tags/create. The tag name is
+// user-facing content and must be tagged _untrusted by the caller.
+func (c *Client) CreateTag(ctx context.Context, accessToken, name string) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/tags/create", map[string]any{"tag": map[string]any{"name": name}})
+}
+
+// ListTags lists all follower tags via /cgi-bin/tags/get.
+func (c *Client) ListTags(ctx context.Context, accessToken string) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/tags/get", map[string]any{})
+}
+
+// UpdateTag renames a follower tag via /cgi-bin/tags/update.
+func (c *Client) UpdateTag(ctx context.Context, accessToken string, id int, name string) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/tags/update", map[string]any{"tag": map[string]any{"id": id, "name": name}})
+}
+
+// DeleteTag deletes a follower tag via /cgi-bin/tags/delete.
+func (c *Client) DeleteTag(ctx context.Context, accessToken string, id int) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/tags/delete", map[string]any{"tag": map[string]any{"id": id}})
+}
+
+// ListTagMembers pages openids carrying a tag via /cgi-bin/user/tag/get.
+func (c *Client) ListTagMembers(ctx context.Context, accessToken string, tagID int, nextOpenID string) (map[string]any, error) {
+	payload := map[string]any{"tagid": tagID}
+	if nextOpenID != "" {
+		payload["next_openid"] = nextOpenID
+	}
+	return c.postMap(ctx, accessToken, "/cgi-bin/user/tag/get", payload)
+}
+
+// BatchTag applies a tag to up to 50 followers via
+// /cgi-bin/tags/members/batchtagging.
+func (c *Client) BatchTag(ctx context.Context, accessToken string, tagID int, openIDs []string) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/tags/members/batchtagging", map[string]any{"tagid": tagID, "openid_list": openIDs})
+}
+
+// BatchUntag removes a tag from up to 50 followers via
+// /cgi-bin/tags/members/batchuntagging.
+func (c *Client) BatchUntag(ctx context.Context, accessToken string, tagID int, openIDs []string) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/tags/members/batchuntagging", map[string]any{"tagid": tagID, "openid_list": openIDs})
+}
+
 func (c *Client) SubmitPublish(ctx context.Context, accessToken, mediaID string) (*PublishSubmitResponse, error) {
 	var out PublishSubmitResponse
 	if err := c.postJSON(ctx, accessToken, "/cgi-bin/freepublish/submit", map[string]any{"media_id": mediaID}, &out); err != nil {

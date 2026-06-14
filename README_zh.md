@@ -115,10 +115,13 @@ wechat-mp-cli setup proxy set --url socks5://127.0.0.1:1080 --dry-run --compact
 | 发布 | `publish submit/status/list/get-article/delete` |
 | 留言 | `comment open/close/list/mark/unmark/delete/reply-add/reply-delete` |
 | 数据 | `analytics article summary/total/read/read-hour/share/share-hour/published-read/published-share/published-summary/published-detail`, `analytics user summary/cumulate` |
-| 菜单 | `menu get/set/delete` |
+| 菜单 | `menu get/set/delete/addconditional` |
+| 二维码 | `qrcode create` |
+| 粉丝 | `user info/list` |
+| 粉丝标签 | `tag get/create/update/delete/members/tagging/untagging` |
 | Webhook | `webhook verify` |
 
-后续计划：更完整的微信排版主题、浏览器兜底和用户/标签管理。
+后续计划：更完整的微信排版主题和浏览器兜底。
 
 ## 开发
 

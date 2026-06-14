@@ -115,10 +115,13 @@ wechat-mp-cli setup proxy set --url socks5://127.0.0.1:1080 --dry-run --compact
 | Publish | `publish submit/status/list/get-article/delete` |
 | Comments | `comment open/close/list/mark/unmark/delete/reply-add/reply-delete` |
 | Analytics | `analytics article summary/total/read/read-hour/share/share-hour/published-read/published-share/published-summary/published-detail`, `analytics user summary/cumulate` |
-| Menu | `menu get/set/delete` |
+| Menu | `menu get/set/delete/addconditional` |
+| QR codes | `qrcode create` |
+| Followers | `user info/list` |
+| Follower tags | `tag get/create/update/delete/members/tagging/untagging` |
 | Webhook | `webhook verify` |
 
-Planned next: richer WeChat typography themes, browser fallback, and user/tag management.
+Planned next: richer WeChat typography themes and browser fallback.
 
 ## Development
 

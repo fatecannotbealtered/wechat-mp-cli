@@ -9,7 +9,7 @@ metadata: {"requires":{"bins":["wechat-mp-cli"],"min_version":"1.0.1"}}
 
 # wechat-mp-cli
 
-Use this Skill for WeChat Official Account API workflows: account setup, API proxy setup, token checks, image processing/upload, permanent and temporary materials, Markdown or HTML draft create/update, draft count/list/get/delete, draft/publish switch status, custom menus, webhook verification, publish lifecycle, comments, and article analytics.
+Use this Skill for WeChat Official Account API workflows: account setup, API proxy setup, token checks, image processing/upload, permanent and temporary materials, Markdown or HTML draft create/update, draft count/list/get/delete, draft/publish switch status, custom menus (including personalized/conditional menus), account QR codes, follower profiles and tags, webhook verification, publish lifecycle, comments, and article analytics.
 
 Do not use this Skill for personal WeChat chat automation, Mini Program development, browser-only manual publishing, or any attempt to bypass WeChat permissions, IP allowlists, credential gates, or user approval.
 
@@ -47,9 +47,9 @@ wechat-mp-cli <command> <same args> --confirm <confirm_token> --compact
 ```
 
 High/critical risk writes (publish submit/delete, draft create/update/delete,
-menu set/delete, asset delete, comment open/close/delete/reply-add, draft
-switch enable) additionally require `--dangerous` in BOTH steps; `reference`
-exposes each command's `risk_level`.
+menu set/delete/addconditional, asset delete, comment open/close/delete/reply-add,
+draft switch enable, tag delete) additionally require `--dangerous` in BOTH steps;
+`reference` exposes each command's `risk_level`.
 
 Rules:
 
@@ -88,7 +88,7 @@ STOP CHECKPOINT: Ask the user before confirming `publish submit`; it may publish
 
 STOP CHECKPOINT: Ask the user before deleting drafts, changing account credentials, or setting a different default account.
 
-STOP CHECKPOINT: Ask the user before deleting published articles, deleting drafts, deleting permanent materials, deleting comments, changing custom menus, replying as the Official Account, or changing the API proxy used for outbound WeChat API calls.
+STOP CHECKPOINT: Ask the user before deleting published articles, deleting drafts, deleting permanent materials, deleting comments, changing custom menus (including personalized/conditional menus), creating QR code tickets, creating/deleting follower tags or batch (un)tagging followers, replying as the Official Account, or changing the API proxy used for outbound WeChat API calls.
 
 STOP CHECKPOINT: Ask the user before enabling the official draft/publish switch; WeChat documents it as irreversible.
 
@@ -111,9 +111,9 @@ Always parse the JSON envelope and check `ok` first.
 
 ## Current Scope
 
-Implemented in `0.1.0`: API-first account setup, API proxy setup, SSH SOCKS command generation, token checks, image inspect/process/upload, Goldmark GFM Markdown/HTML render with frontmatter, draft create/update/count/list/get/delete and switch status/enable, publish submit/status/list/get-article/delete, comments open/close/list/mark/unmark/delete/reply-add/reply-delete, article/user analytics including published-content endpoints, permanent material count/list/get/delete, temporary media upload/get/get-hd-voice, custom menu get/set/delete, webhook verify, self-description commands.
+Implemented in `0.1.0`: API-first account setup, API proxy setup, SSH SOCKS command generation, token checks, image inspect/process/upload, Goldmark GFM Markdown/HTML render with frontmatter, draft create/update/count/list/get/delete and switch status/enable, publish submit/status/list/get-article/delete, comments open/close/list/mark/unmark/delete/reply-add/reply-delete, article/user analytics including published-content endpoints, permanent material count/list/get/delete, temporary media upload/get/get-hd-voice, custom menu get/set/delete/addconditional, account QR code create, follower info/list, follower tag get/create/update/delete/members/tagging/untagging, webhook verify, self-description commands.
 
-Planned: richer WeChat typography themes, browser fallback, and user/tag management.
+Planned: richer WeChat typography themes and browser fallback.
 
 ## Evaluation Scenarios
 

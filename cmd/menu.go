@@ -119,12 +119,65 @@ var menuDeleteCmd = writeCommand(&cobra.Command{
 	},
 }, "high", "Deletes the configured WeChat account custom menu.")
 
+var menuAddConditional = struct {
+	account string
+	file    string
+}{}
+
+var menuAddConditionalCmd = writeCommand(&cobra.Command{
+	Use:   "addconditional",
+	Short: "Add a conditional (personalized) menu with a matchrule from a JSON file",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := required(menuAddConditional.file, "--file"); err != nil {
+			return fail(ExitBadArgs, "E_VALIDATION", err.Error(), false)
+		}
+		data, err := os.ReadFile(menuAddConditional.file)
+		if err != nil {
+			return handleError(err)
+		}
+		if !json.Valid(data) {
+			return fail(ExitBadArgs, "E_VALIDATION", "--file must contain valid JSON", false)
+		}
+		payload := map[string]any{
+			"account":   menuAddConditional.account,
+			"file":      filepath.Clean(menuAddConditional.file),
+			"json_hash": sha256Bytes(data),
+		}
+		ok, err := confirmWrite("menu.addconditional", payload, map[string]any{
+			"file":          filepath.Clean(menuAddConditional.file),
+			"json_hash":     sha256Bytes(data),
+			"will_call_api": true,
+			"api_operation": "menu/addconditional",
+		})
+		if err != nil || !ok {
+			return err
+		}
+		cfg, account, token, err := accessToken(menuAddConditional.account)
+		if err != nil {
+			return fail(ExitBadArgs, "E_CONFIG", err.Error(), false)
+		}
+		client, err := apiClient(cfg)
+		if err != nil {
+			return handleError(err)
+		}
+		res, err := client.AddConditionalMenu(apiCtx(), token, data)
+		if err != nil {
+			return handleError(err)
+		}
+		res["account"] = account.Alias
+		return printData(res)
+	},
+}, "high", "Adds a personalized menu to the configured WeChat account.")
+
 func init() {
 	menuGetCmd.Flags().StringVar(&menuAccount, "account", "", "Account alias; defaults to configured default")
 	menuSetCmd.Flags().StringVar(&menuSet.account, "account", "", "Account alias; defaults to configured default")
 	menuSetCmd.Flags().StringVar(&menuSet.file, "file", "", "Menu JSON file")
 	menuDeleteCmd.Flags().StringVar(&menuDeleteAccount, "account", "", "Account alias; defaults to configured default")
-	menuCmd.AddCommand(menuGetCmd, menuSetCmd, menuDeleteCmd)
+	menuAddConditionalCmd.Flags().StringVar(&menuAddConditional.account, "account", "", "Account alias; defaults to configured default")
+	menuAddConditionalCmd.Flags().StringVar(&menuAddConditional.file, "file", "", "Conditional menu JSON file (button[] + matchrule)")
+	menuCmd.AddCommand(menuGetCmd, menuSetCmd, menuDeleteCmd, menuAddConditionalCmd)
 	rootCmd.AddCommand(menuCmd)
 }
 
