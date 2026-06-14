@@ -21,6 +21,10 @@
 | 用户数据 | `/datacube/getusersummary`, `/getusercumulate` | `analytics user summary/cumulate` |
 | 文章相关素材 | `/cgi-bin/media/uploadimg`, `/cgi-bin/material/add_material`, `/get_material`, `/get_materialcount`, `/batchget_material`, `/del_material` | `image upload`, `asset count/list/get/delete` |
 | 临时素材 | `/cgi-bin/media/upload`, `/get`, `/get/jssdk` | `asset temp upload/get/get-hd-voice` |
+| 自定义菜单 | `/cgi-bin/menu/create`, `/delete`, `/get_current_selfmenu_info`, `/addconditional` | `menu set/delete/get/addconditional` |
+| 账号二维码 | `/cgi-bin/qrcode/create` | `qrcode create` |
+| 粉丝 | `/cgi-bin/user/info`, `/cgi-bin/user/get` | `user info/list` |
+| 粉丝标签 | `/cgi-bin/tags/create`, `/get`, `/update`, `/delete`, `/cgi-bin/user/tag/get`, `/cgi-bin/tags/members/batchtagging`, `/batchuntagging` | `tag create/get/update/delete/members/tagging/untagging` |
 
 ## 有意保留的边界
 

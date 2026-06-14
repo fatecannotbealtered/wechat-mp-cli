@@ -80,6 +80,25 @@ var boundaryCases = []boundaryCase{
 	{name: "menu set", write: true, flag: "file", file: `menu.json:{"button":[{"type":"view","name":"Home","url":"https://example.com"}]}`,
 		args: []string{"menu", "set", "--dangerous"}},
 	{name: "menu delete", write: true, args: []string{"menu", "delete", "--dangerous"}},
+	{name: "menu addconditional", write: true, flag: "file",
+		file: `cond.json:{"button":[{"type":"view","name":"Home","url":"https://example.com"}],"matchrule":{"tag_id":"2"}}`,
+		args: []string{"menu", "addconditional", "--dangerous"}},
+
+	// qrcode
+	{name: "qrcode create", write: true, args: []string{"qrcode", "create", "--expire-seconds", "604800", "--scene-str", "promo-001"}},
+
+	// user
+	{name: "user info", args: []string{"user", "info", "OPENID"}},
+	{name: "user list", args: []string{"user", "list"}},
+
+	// tag
+	{name: "tag get", args: []string{"tag", "get"}},
+	{name: "tag create", write: true, args: []string{"tag", "create", "--name", "VIP"}},
+	{name: "tag update", write: true, args: []string{"tag", "update", "--id", "100", "--name", "VIP2"}},
+	{name: "tag delete", write: true, args: []string{"tag", "delete", "--id", "100", "--dangerous"}},
+	{name: "tag members", args: []string{"tag", "members", "100"}},
+	{name: "tag tagging", write: true, args: []string{"tag", "tagging", "--id", "100", "--openid", "OPENID"}},
+	{name: "tag untagging", write: true, args: []string{"tag", "untagging", "--id", "100", "--openid", "OPENID"}},
 
 	// publish
 	{name: "publish status", args: []string{"publish", "status", "--publish-id", "100000001"}},

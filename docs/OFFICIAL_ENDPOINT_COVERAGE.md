@@ -21,6 +21,10 @@ This document maps `wechat-mp-cli` commands to the official WeChat Official Acco
 | User analytics | `/datacube/getusersummary`, `/getusercumulate` | `analytics user summary/cumulate` |
 | Materials used by articles | `/cgi-bin/media/uploadimg`, `/cgi-bin/material/add_material`, `/get_material`, `/get_materialcount`, `/batchget_material`, `/del_material` | `image upload`, `asset count/list/get/delete` |
 | Temporary media | `/cgi-bin/media/upload`, `/get`, `/get/jssdk` | `asset temp upload/get/get-hd-voice` |
+| Menu | `/cgi-bin/menu/create`, `/delete`, `/get_current_selfmenu_info`, `/addconditional` | `menu set/delete/get/addconditional` |
+| Account QR codes | `/cgi-bin/qrcode/create` | `qrcode create` |
+| Followers | `/cgi-bin/user/info`, `/cgi-bin/user/get` | `user info/list` |
+| Follower tags | `/cgi-bin/tags/create`, `/get`, `/update`, `/delete`, `/cgi-bin/user/tag/get`, `/cgi-bin/tags/members/batchtagging`, `/batchuntagging` | `tag create/get/update/delete/members/tagging/untagging` |
 
 ## Intentional Boundaries
 

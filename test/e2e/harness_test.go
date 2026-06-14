@@ -40,7 +40,14 @@ const universalBody = `{
 }`
 
 var pathOverrides = map[string]string{
-	"/cgi-bin/stable_token": `{"access_token":"test-access-token","expires_in":7200}`,
+	"/cgi-bin/stable_token":        `{"access_token":"test-access-token","expires_in":7200}`,
+	"/cgi-bin/qrcode/create":       `{"errcode":0,"errmsg":"ok","ticket":"gQH47joAAAAAAAAAAS5o","expire_seconds":604800,"url":"https://weixin.qq.com/q/abc"}`,
+	"/cgi-bin/user/info":           `{"errcode":0,"errmsg":"ok","subscribe":1,"openid":"OPENID","nickname":"Nick","remark":"vip","tagid_list":[100]}`,
+	"/cgi-bin/user/get":            `{"errcode":0,"errmsg":"ok","total":1,"count":1,"data":{"openid":["OPENID"]},"next_openid":"OPENID"}`,
+	"/cgi-bin/user/tag/get":        `{"errcode":0,"errmsg":"ok","count":1,"data":{"openid":["OPENID"]},"next_openid":"OPENID"}`,
+	"/cgi-bin/tags/get":            `{"errcode":0,"errmsg":"ok","tags":[{"id":100,"name":"VIP","count":3}]}`,
+	"/cgi-bin/tags/create":         `{"errcode":0,"errmsg":"ok","tag":{"id":100,"name":"VIP"}}`,
+	"/cgi-bin/menu/addconditional": `{"errcode":0,"errmsg":"ok","menuid":"409110092"}`,
 }
 
 func universalMux() http.Handler {
