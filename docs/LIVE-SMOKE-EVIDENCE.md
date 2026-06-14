@@ -27,6 +27,42 @@ Verified against the same test account (aggregate only):
 
 All v1.0.2 new commands are implemented + mock-verified; the follower-dependent ones are honestly noted as not exercisable on an empty test account.
 
+## 2026-06-15 — batch commands (dry-run / contract only)
+
+New batch surface: `message mass sendall` / `mass send --openids` / `mass preview`
+/ `mass get` / `mass delete`, and `user info-batch`.
+
+**Environment for this round: no live WeChat credentials were available**
+(`doctor` → `account_config: warn (no account configured)`, no
+`WECHAT_MP_CLI_APP_ID`/`_APP_SECRET`), and per the safety policy
+broadcast/irreversible batches are **dry-run only at night** regardless. So no
+real broadcast, preview-send, recall, or follower read was executed against the
+live API. Verification was done **offline against the built binary** (validation
+/ gate / envelope / single-use confirm) plus the **mock-upstream e2e suite**
+(per-item aggregation, replay-conflict through a real send to the mock).
+Aggregate pass/fail only — no openids, msg_ids, tokens, or secrets recorded.
+
+| Command | Result | Method |
+|---|---|---|
+| `message mass sendall` | dry-run only | binary: critical `--dangerous` double-gate enforced; `--dry-run` issues a confirm token (not executed); audience guard (`--to-all` xor positive `--tag-id`) and body guard (exactly one of `--text`/`--mpnews-media-id`) both return `E_VALIDATION`. **Not real-machine executed** (no creds + night policy). |
+| `message mass send --openids` | dry-run only | binary: critical gate enforced; plural `--openids` (comma + repeated) de-duped, input order preserved, blast-radius `total`/`targets` shown in preview; empty list and dual-body → `E_VALIDATION`. **Not real-machine executed.** |
+| `message mass preview` | dry-run only | binary: high-risk gate enforced; `--dry-run` confirm token issued; missing recipient (`--openid`/`--towxname`) → `E_VALIDATION`. Sends one real message when confirmed, so **not executed** (no creds). |
+| `message mass delete` | dry-run only | binary: critical gate enforced; `--dry-run` token issued (not executed); `--msg-id ≤ 0` → `E_VALIDATION`. Irreversible recall → **dry-run only, never real-machine executed.** |
+| `message mass get` | not tested (live) | binary: `--msg-id ≤ 0` → `E_VALIDATION` before any call; valid id with no creds → `E_CONFIG` (validation precedence confirmed). Live read **not tested** — needs a real `msg_id` + credentials. Read path mock-verified. |
+| `user info-batch` | dry/structure only | binary: empty `--openids` → `E_VALIDATION`; populated list with no creds → `E_CONFIG` (validation + plural parse precede the call). Per-item aggregation (`items[]` keyed by openid, de-dupe, `_untrusted`, `summary` total/succeeded/failed) **mock-verified** in e2e. Live read **not tested** — needs real followers. |
+
+### Contract points exercised this round
+
+| Contract point | Result | Method |
+|---|---|---|
+| Single-use confirm token (replay rejected) | PASS | binary: dry-run → first `--confirm` consumes token (then `E_CONFIG`, no creds) → replay returns `E_CONFLICT` "token already used". Also mock e2e `TestBatch_MassSendConfirmThenReplayConflict`. |
+| `--dangerous` second gate (high/critical) | PASS | binary: every critical (`sendall`/`send`/`delete`) and high (`preview`) command blocks with `E_CONFIRMATION_REQUIRED` when `--dangerous` is absent. |
+| Partial-failure aggregation shape | PASS | mock e2e `TestBatch_InfoBatchAggregatesPerItem`: 3 inputs incl. one non-follower → `succeeded:2 / failed:1`, item order preserved, ghost item carries `E_NOT_FOUND`. |
+
+No real broadcast, recall, preview-send, or follower read was performed. The
+irreversible/broadcast batches (`mass sendall`, `mass send`, `mass delete`) were
+**dry-run verified, never real-machine executed**, per the safety policy.
+
 ## Result by class
 
 ### Auth + token — PASS
