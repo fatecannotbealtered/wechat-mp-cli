@@ -502,6 +502,54 @@ func (c *Client) ListUsers(ctx context.Context, accessToken, nextOpenID string) 
 	return c.getJSON(ctx, accessToken, "/cgi-bin/user/get", values)
 }
 
+// GetUserInfoBatch fetches up to 100 follower profiles in one call via
+// /cgi-bin/user/info/batchget. Each entry pairs an openid with a language; the
+// caller is responsible for chunking lists longer than the upstream cap of 100.
+// The nickname/remark fields it returns are user-controlled and must be tagged
+// _untrusted by the caller.
+func (c *Client) GetUserInfoBatch(ctx context.Context, accessToken string, userList []map[string]any) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/user/info/batchget", map[string]any{"user_list": userList})
+}
+
+// MassSendAll broadcasts a message to all followers or a tag via
+// /cgi-bin/message/mass/sendall. The payload selects the filter (is_to_all or
+// tag_id) and the message body (mpnews/text/voice/image/mpvideo). The call is
+// asynchronous: the response carries a msg_id the caller polls with MassGet.
+func (c *Client) MassSendAll(ctx context.Context, accessToken string, payload map[string]any) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/message/mass/sendall", payload)
+}
+
+// MassSend broadcasts a message to an explicit openid list (≤10000) via
+// /cgi-bin/message/mass/send. Like MassSendAll it is asynchronous and returns a
+// msg_id; the openid list is sent as one job, not chunked.
+func (c *Client) MassSend(ctx context.Context, accessToken string, payload map[string]any) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/message/mass/send", payload)
+}
+
+// MassPreview sends a single preview of a mass message to one openid (or
+// towxname) via /cgi-bin/message/mass/preview, so the operator can eyeball the
+// rendered message before broadcasting.
+func (c *Client) MassPreview(ctx context.Context, accessToken string, payload map[string]any) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/message/mass/preview", payload)
+}
+
+// MassGet reads the delivery status of a mass-send job via
+// /cgi-bin/message/mass/get.
+func (c *Client) MassGet(ctx context.Context, accessToken string, msgID int64) (map[string]any, error) {
+	return c.postMap(ctx, accessToken, "/cgi-bin/message/mass/get", map[string]any{"msg_id": msgID})
+}
+
+// MassDelete deletes (recalls) a sent mass message via
+// /cgi-bin/message/mass/delete. article_idx selects one article inside an
+// mpnews set; 0 deletes the first/only article.
+func (c *Client) MassDelete(ctx context.Context, accessToken string, msgID int64, articleIdx int) (map[string]any, error) {
+	payload := map[string]any{"msg_id": msgID}
+	if articleIdx > 0 {
+		payload["article_idx"] = articleIdx
+	}
+	return c.postMap(ctx, accessToken, "/cgi-bin/message/mass/delete", payload)
+}
+
 // CreateTag creates a follower tag via /cgi-bin/tags/create. The tag name is
 // user-facing content and must be tagged _untrusted by the caller.
 func (c *Client) CreateTag(ctx context.Context, accessToken, name string) (map[string]any, error) {
