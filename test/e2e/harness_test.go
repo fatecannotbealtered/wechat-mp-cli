@@ -40,14 +40,20 @@ const universalBody = `{
 }`
 
 var pathOverrides = map[string]string{
-	"/cgi-bin/stable_token":        `{"access_token":"test-access-token","expires_in":7200}`,
-	"/cgi-bin/qrcode/create":       `{"errcode":0,"errmsg":"ok","ticket":"gQH47joAAAAAAAAAAS5o","expire_seconds":604800,"url":"https://weixin.qq.com/q/abc"}`,
-	"/cgi-bin/user/info":           `{"errcode":0,"errmsg":"ok","subscribe":1,"openid":"OPENID","nickname":"Nick","remark":"vip","tagid_list":[100]}`,
-	"/cgi-bin/user/get":            `{"errcode":0,"errmsg":"ok","total":1,"count":1,"data":{"openid":["OPENID"]},"next_openid":"OPENID"}`,
-	"/cgi-bin/user/tag/get":        `{"errcode":0,"errmsg":"ok","count":1,"data":{"openid":["OPENID"]},"next_openid":"OPENID"}`,
-	"/cgi-bin/tags/get":            `{"errcode":0,"errmsg":"ok","tags":[{"id":100,"name":"VIP","count":3}]}`,
-	"/cgi-bin/tags/create":         `{"errcode":0,"errmsg":"ok","tag":{"id":100,"name":"VIP"}}`,
-	"/cgi-bin/menu/addconditional": `{"errcode":0,"errmsg":"ok","menuid":"409110092"}`,
+	"/cgi-bin/stable_token":         `{"access_token":"test-access-token","expires_in":7200}`,
+	"/cgi-bin/qrcode/create":        `{"errcode":0,"errmsg":"ok","ticket":"gQH47joAAAAAAAAAAS5o","expire_seconds":604800,"url":"https://weixin.qq.com/q/abc"}`,
+	"/cgi-bin/user/info":            `{"errcode":0,"errmsg":"ok","subscribe":1,"openid":"OPENID","nickname":"Nick","remark":"vip","tagid_list":[100]}`,
+	"/cgi-bin/user/get":             `{"errcode":0,"errmsg":"ok","total":1,"count":1,"data":{"openid":["OPENID"]},"next_openid":"OPENID"}`,
+	"/cgi-bin/user/info/batchget":   `{"errcode":0,"errmsg":"ok","user_info_list":[{"openid":"OPENID","subscribe":1,"nickname":"Nick","remark":"vip"},{"openid":"OPENID2","subscribe":1,"nickname":"Nick2","remark":""}]}`,
+	"/cgi-bin/message/mass/sendall": `{"errcode":0,"errmsg":"send job submission success","msg_id":2247483647,"msg_data_id":2247483647}`,
+	"/cgi-bin/message/mass/send":    `{"errcode":0,"errmsg":"send job submission success","msg_id":2247483647,"msg_data_id":2247483647}`,
+	"/cgi-bin/message/mass/preview": `{"errcode":0,"errmsg":"preview success","msg_id":2247483648}`,
+	"/cgi-bin/message/mass/get":     `{"errcode":0,"errmsg":"ok","msg_id":2247483647,"msg_status":"SEND_SUCCESS"}`,
+	"/cgi-bin/message/mass/delete":  `{"errcode":0,"errmsg":"ok"}`,
+	"/cgi-bin/user/tag/get":         `{"errcode":0,"errmsg":"ok","count":1,"data":{"openid":["OPENID"]},"next_openid":"OPENID"}`,
+	"/cgi-bin/tags/get":             `{"errcode":0,"errmsg":"ok","tags":[{"id":100,"name":"VIP","count":3}]}`,
+	"/cgi-bin/tags/create":          `{"errcode":0,"errmsg":"ok","tag":{"id":100,"name":"VIP"}}`,
+	"/cgi-bin/menu/addconditional":  `{"errcode":0,"errmsg":"ok","menuid":"409110092"}`,
 }
 
 func universalMux() http.Handler {

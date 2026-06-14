@@ -90,6 +90,14 @@ var boundaryCases = []boundaryCase{
 	// user
 	{name: "user info", args: []string{"user", "info", "OPENID"}},
 	{name: "user list", args: []string{"user", "list"}},
+	{name: "user info-batch", args: []string{"user", "info-batch", "--openids", "OPENID,OPENID2"}},
+
+	// message mass (broadcast) — all writes; sendall/send/preview/delete are critical/high → --dangerous
+	{name: "message mass sendall", write: true, args: []string{"message", "mass", "sendall", "--to-all", "--mpnews-media-id", "MEDIA_ID", "--dangerous"}},
+	{name: "message mass send", write: true, args: []string{"message", "mass", "send", "--openids", "OPENID,OPENID2", "--mpnews-media-id", "MEDIA_ID", "--dangerous"}},
+	{name: "message mass preview", write: true, args: []string{"message", "mass", "preview", "--openid", "OPENID", "--mpnews-media-id", "MEDIA_ID", "--dangerous"}},
+	{name: "message mass get", args: []string{"message", "mass", "get", "--msg-id", "2247483647"}},
+	{name: "message mass delete", write: true, args: []string{"message", "mass", "delete", "--msg-id", "2247483647", "--dangerous"}},
 
 	// tag
 	{name: "tag get", args: []string{"tag", "get"}},

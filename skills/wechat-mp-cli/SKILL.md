@@ -9,7 +9,7 @@ metadata: {"requires":{"bins":["wechat-mp-cli"],"min_version":"1.0.2"}}
 
 # wechat-mp-cli
 
-Use this Skill for WeChat Official Account API workflows: account setup, API proxy setup, token checks, image processing/upload, permanent and temporary materials, Markdown or HTML draft create/update, draft count/list/get/delete, draft/publish switch status, custom menus (including personalized/conditional menus), account QR codes, follower profiles and tags, webhook verification, publish lifecycle, comments, and article analytics.
+Use this Skill for WeChat Official Account API workflows: account setup, API proxy setup, token checks, image processing/upload, permanent and temporary materials, Markdown or HTML draft create/update, draft count/list/get/delete, draft/publish switch status, custom menus (including personalized/conditional menus), account QR codes, follower profiles and tags, batch follower profile lookup, mass (broadcast) messages, webhook verification, publish lifecycle, comments, and article analytics.
 
 Do not use this Skill for personal WeChat chat automation, Mini Program development, browser-only manual publishing, or any attempt to bypass WeChat permissions, IP allowlists, credential gates, or user approval.
 
@@ -48,8 +48,9 @@ wechat-mp-cli <command> <same args> --confirm <confirm_token> --compact
 
 High/critical risk writes (publish submit/delete, draft create/update/delete,
 menu set/delete/addconditional, asset delete, comment open/close/delete/reply-add,
-draft switch enable, tag delete) additionally require `--dangerous` in BOTH steps;
-`reference` exposes each command's `risk_level`.
+draft switch enable, tag delete, message mass sendall/send/preview/delete)
+additionally require `--dangerous` in BOTH steps; `reference` exposes each
+command's `risk_level`.
 
 Rules:
 
@@ -82,7 +83,25 @@ wechat-mp-cli publish submit --media-id <draft_media_id> --account prod --danger
 wechat-mp-cli publish status --publish-id <publish_id> --account prod --compact
 ```
 
+## Batch Operations
+
+Batch commands are one command with one envelope, one confirm token, and one
+aggregated result — never a loop you drive per item.
+
+- Plural inputs accept comma-separated and/or repeated flags: `--openids a,b --openids c`. Duplicates are de-duped; input order is preserved in `items[]` so you can zip results back to inputs.
+- `user info-batch --openids ...` returns `items[]` (each with `target`, `ok`, and on failure `error{code,retryable}`) plus `summary{total,succeeded,failed}`. A per-item failure (e.g. an openid that is not a follower) does not fail the whole command. Lists over 100 openids are auto-chunked; this is invisible in the result.
+- `--continue-on-error` (default `true`) keeps the batch going after an item fails; set `false` to stop at the first failure (already-applied items stay applied; remaining targets are reported as `skipped`).
+- Mass send is a single asynchronous job, not a per-recipient batch: `message mass sendall`/`send` return one `msg_id`. Poll status with `message mass get --msg-id <msg_id>`. The openid list for `send` is capped at 10000 and is not silently chunked.
+
+```bash
+wechat-mp-cli user info-batch --openids OPENID1,OPENID2 --openids OPENID3 --compact
+wechat-mp-cli message mass send --openids OPENID1,OPENID2 --mpnews-media-id <media_id> --dangerous --dry-run --compact
+wechat-mp-cli message mass send --openids OPENID1,OPENID2 --mpnews-media-id <media_id> --dangerous --confirm <confirm_token> --compact
+```
+
 ## Checkpoints
+
+STOP CHECKPOINT: Ask the user before any mass (broadcast) message — `message mass sendall`, `message mass send`, `message mass preview`, or `message mass delete`. A mass send reaches real followers and cannot be unsent (delete only removes the article content after delivery).
 
 STOP CHECKPOINT: Ask the user before confirming `publish submit`; it may publish public content.
 
@@ -111,7 +130,7 @@ Always parse the JSON envelope and check `ok` first.
 
 ## Current Scope
 
-Implemented in `0.1.0`: API-first account setup, API proxy setup, SSH SOCKS command generation, token checks, image inspect/process/upload, Goldmark GFM Markdown/HTML render with frontmatter, draft create/update/count/list/get/delete and switch status/enable, publish submit/status/list/get-article/delete, comments open/close/list/mark/unmark/delete/reply-add/reply-delete, article/user analytics including published-content endpoints, permanent material count/list/get/delete, temporary media upload/get/get-hd-voice, custom menu get/set/delete/addconditional, account QR code create, follower info/list, follower tag get/create/update/delete/members/tagging/untagging, webhook verify, self-description commands.
+Implemented in `0.1.0`: API-first account setup, API proxy setup, SSH SOCKS command generation, token checks, image inspect/process/upload, Goldmark GFM Markdown/HTML render with frontmatter, draft create/update/count/list/get/delete and switch status/enable, publish submit/status/list/get-article/delete, comments open/close/list/mark/unmark/delete/reply-add/reply-delete, article/user analytics including published-content endpoints, permanent material count/list/get/delete, temporary media upload/get/get-hd-voice, custom menu get/set/delete/addconditional, account QR code create, follower info/list/info-batch, follower tag get/create/update/delete/members/tagging/untagging, mass message sendall/send/preview/get/delete, webhook verify, self-description commands.
 
 Planned: richer WeChat typography themes and browser fallback.
 
