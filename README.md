@@ -3,7 +3,7 @@
 [English](README.md) | [中文](README_zh.md)
 
 [![CI](https://github.com/fatecannotbealtered/wechat-mp-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/fatecannotbealtered/wechat-mp-cli/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@ananke/wechat-mp-cli.svg)](https://www.npmjs.com/package/@ananke/wechat-mp-cli)
+[![npm version](https://img.shields.io/npm/v/@fateforge/wechat-mp-cli.svg)](https://www.npmjs.com/package/@fateforge/wechat-mp-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 AI-native CLI for WeChat Official Account operations. The current milestone is API-first: account setup, token checks, image processing/upload, Markdown-to-draft creation, draft management, publish lifecycle, comments, article analytics, permanent and temporary materials, custom menus, remote API proxy helpers, and webhook verification.
@@ -23,7 +23,7 @@ Worst-case risk tier: **T2**. This tool can create drafts and submit public publ
 ## Install
 
 ```bash
-npm install -g @ananke/wechat-mp-cli
+npm install -g @fateforge/wechat-mp-cli
 npx skills add fatecannotbealtered/wechat-mp-cli -y -g
 ```
 

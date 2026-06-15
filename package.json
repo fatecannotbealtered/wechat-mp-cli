@@ -1,5 +1,5 @@
 {
-  "name": "@ananke/wechat-mp-cli",
+  "name": "@fateforge/wechat-mp-cli",
   "version": "1.0.3",
   "description": "AI-native CLI for WeChat Official Account drafting, publishing, assets, comments, analytics, menus, users, and webhooks",
   "keywords": [
@@ -28,12 +28,12 @@
     "wechat-mp-cli": "scripts/run.js"
   },
   "optionalDependencies": {
-    "@ananke/wechat-mp-cli-darwin-arm64": "1.0.3",
-    "@ananke/wechat-mp-cli-darwin-x64": "1.0.3",
-    "@ananke/wechat-mp-cli-linux-arm64": "1.0.3",
-    "@ananke/wechat-mp-cli-linux-x64": "1.0.3",
-    "@ananke/wechat-mp-cli-win32-arm64": "1.0.3",
-    "@ananke/wechat-mp-cli-win32-x64": "1.0.3"
+    "@fateforge/wechat-mp-cli-darwin-arm64": "1.0.3",
+    "@fateforge/wechat-mp-cli-darwin-x64": "1.0.3",
+    "@fateforge/wechat-mp-cli-linux-arm64": "1.0.3",
+    "@fateforge/wechat-mp-cli-linux-x64": "1.0.3",
+    "@fateforge/wechat-mp-cli-win32-arm64": "1.0.3",
+    "@fateforge/wechat-mp-cli-win32-x64": "1.0.3"
   },
   "files": [
     "scripts/run.js",
