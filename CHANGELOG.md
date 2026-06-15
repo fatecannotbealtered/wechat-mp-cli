@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Batch operations (CLI-SPEC §15): `message mass sendall`/`send`/`preview`/`get`/`delete` broadcast a message to all followers, a tag, or an explicit openid list (≤10000, one async job) — all gated by `--dry-run` → `--confirm` plus `--dangerous` for the critical/high writes; poll delivery with `message mass get --msg-id`. `user info-batch --openids` fetches up to 100 follower profiles per call, auto-chunking longer lists, and returns one aggregated `items[]` (keyed by openid `target`) plus a `summary{total,succeeded,failed}` so a per-item failure never fails the whole command (`--continue-on-error`, default `true`).
 
+### Fixed
+
+- `message mass sendall`: enforce `--to-all` and `--tag-id` as mutually exclusive. Previously giving both let `--to-all` silently win; now the audience guard requires exactly one and returns `E_VALIDATION` when both are set.
+
 ## [1.0.2] - 2026-06-14
 
 ### Added
