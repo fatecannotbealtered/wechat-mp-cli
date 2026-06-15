@@ -103,8 +103,13 @@ resolved to exactly `[BBB, AAA, CCC]` — **de-duplicated, input order preserved
 All three failed at the live batchget call (`40003`); the chunk-level error
 mapped onto **every item** as `E_VALIDATION`, `summary{total:3,succeeded:0,failed:3}`
 (counts equal the item tally), and the envelope carried `_untrusted:["items"]`.
-The follower-success path and `E_NOT_FOUND` ghost-item path remain mock-verified
-only (no real followers to exercise them).
+**Success path (live, 2026-06-15 — owner scanned the test-account QR to follow):**
+one real follower openid → `summary{total:1,succeeded:1,failed:0}`, `item.ok=true`
+with the full subscriber profile (nickname / openid / subscribe_time / tagid_list /
+remark / sex / … 17 fields) and `_untrusted` present. De-dupe + partial-failure in one
+call: real openid ×2 + one bogus → `total:2` (folded), `succeeded:1/failed:1`, per-item
+`[true,false]`. (No real openid/nickname values are recorded in this document.) The
+`E_NOT_FOUND` ghost-item path remains mock-verified.
 
 ### Guards & gating (real creds present, so gates run for real)
 
@@ -113,7 +118,7 @@ only (no real followers to exercise them).
 | `--dangerous` second gate (critical `sendall`) | PASS | Without `--dangerous`: `E_CONFIRMATION_REQUIRED`, exit 5. With `--dangerous --dry-run`: confirm token + `expires_at` issued. |
 | Single-use confirm replay | PASS | `send` confirm token consumed by first call (token burned **before** the write, so even the 48001 failure consumed it); replay → `E_CONFLICT`, exit 6. |
 | Audience guard — neither `--to-all` nor `--tag-id` | PASS | `E_VALIDATION` "set --to-all or a positive --tag-id", exit 2. |
-| Audience guard — `--to-all` **and** `--tag-id` together | **OBSERVATION / gap** | **Not rejected.** `--to-all` silently wins (`audience:"all followers"`); the command does not enforce mutual exclusion when both are set (`message.go` only requires a tag when `!toAll`). Expected a usage error per the mutual-exclusion intent; recorded honestly as a gap, not a pass. |
+| Audience guard — `--to-all` **and** `--tag-id` together | **PASS (fixed 2026-06-15, commit f2dcbef)** | Now rejected: both set → `E_VALIDATION` "mutually exclusive: set exactly one", exit 2. Originally an observed gap (`--to-all` silently won); fixed via XOR validation + unit test `TestResolveSendAllFilterXOR`. |
 | Body guard — no body | PASS | `E_VALIDATION` "a message body is required", exit 2. |
 | Body guard — both `--text` and `--mpnews-media-id` | PASS | `E_VALIDATION` "set only one of …", exit 2. |
 | `mass get` / `info-batch` validation precedence | PASS | `--msg-id 0` and empty `--openids` → `E_VALIDATION` before any API call. |
@@ -123,7 +128,7 @@ only (no real followers to exercise them).
 
 | Command | Grade |
 |---|---|
-| `user info-batch` | **live** (validation + per-item aggregation against real API; success path mock-only) |
+| `user info-batch` | **live** (validation + per-item aggregation + **success path** against a real follower, 2026-06-15) |
 | `message mass sendall` | **live**, permission OK (0 followers → no recipients) |
 | `message mass send` | **live**, **permission restricted (48001)** |
 | `message mass preview` | **live**, permission OK (only synthetic openid rejected) |
