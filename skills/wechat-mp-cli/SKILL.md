@@ -13,6 +13,19 @@ Use this Skill for WeChat Official Account API workflows: account setup, API pro
 
 Do not use this Skill for personal WeChat chat automation, Mini Program development, browser-only manual publishing, or any attempt to bypass WeChat permissions, IP allowlists, credential gates, or user approval.
 
+```bash
+# Please install wechat-mp-cli and use it for all WeChat Official Account operations going forward (JSON is the default output).
+# Install CLI
+npm install -g @fateforge/wechat-mp-cli
+
+# Install CLI Skill (required) — copies into your agent-supported skills directory
+npx skills add fatecannotbealtered/wechat-mp-cli -y -g
+
+# Configure account and verify
+wechat-mp-cli setup account add
+wechat-mp-cli doctor --compact
+```
+
 ## First Step
 
 Before task commands, inspect the live binary and environment:
