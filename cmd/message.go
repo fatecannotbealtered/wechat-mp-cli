@@ -54,6 +54,24 @@ var massSendAll = struct {
 	body    massBody
 }{}
 
+// resolveSendAllFilter builds the audience filter for a mass sendall. The
+// audience must be exactly one of the two mutually exclusive choices: every
+// follower (--to-all) or a single tag (--tag-id). Giving both is a contract
+// violation, not a precedence question — otherwise --to-all would silently win
+// and a tag-scoped broadcast could fan out to the whole base by accident.
+func resolveSendAllFilter(toAll bool, tagID int) (map[string]any, error) {
+	switch {
+	case toAll && tagID > 0:
+		return nil, fmt.Errorf("--to-all and --tag-id are mutually exclusive: set exactly one")
+	case toAll:
+		return map[string]any{"is_to_all": true}, nil
+	case tagID > 0:
+		return map[string]any{"is_to_all": false, "tag_id": tagID}, nil
+	default:
+		return nil, fmt.Errorf("set --to-all or a positive --tag-id")
+	}
+}
+
 var massSendAllCmd = writeCommand(&cobra.Command{
 	Use:   "sendall",
 	Short: "Broadcast to all followers or a single tag (asynchronous)",
@@ -63,14 +81,9 @@ var massSendAllCmd = writeCommand(&cobra.Command{
 		if err != nil {
 			return fail(ExitBadArgs, "E_VALIDATION", err.Error(), false)
 		}
-		// Audience filter: --to-all reaches every follower; otherwise a tag is
-		// required so a broadcast can never default to the whole base by accident.
-		filter := map[string]any{"is_to_all": massSendAll.toAll}
-		if !massSendAll.toAll {
-			if massSendAll.tagID <= 0 {
-				return fail(ExitBadArgs, "E_VALIDATION", "set --to-all or a positive --tag-id", false)
-			}
-			filter["tag_id"] = massSendAll.tagID
+		filter, err := resolveSendAllFilter(massSendAll.toAll, massSendAll.tagID)
+		if err != nil {
+			return fail(ExitBadArgs, "E_VALIDATION", err.Error(), false)
 		}
 		payload := map[string]any{"account": massSendAll.account, "filter": filter}
 		for k, v := range body {
