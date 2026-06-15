@@ -63,6 +63,76 @@ No real broadcast, recall, preview-send, or follower read was performed. The
 irreversible/broadcast batches (`mass sendall`, `mass send`, `mass delete`) were
 **dry-run verified, never real-machine executed**, per the safety policy.
 
+## 2026-06-15 — batch commands (real credentials, live probe)
+
+Re-run of the batch surface **with real test-account credentials present** this
+time (supplied via `WECHAT_MP_CLI_APP_ID` / `WECHAT_MP_CLI_APP_SECRET` env vars
+only — never written to any file, commit, or this document). Built from branch
+`smoke/batch-2026-06-15` source (`go build`); the globally installed v1.0.2 has
+no batch commands.
+
+- **Account state:** `user list` → `total: 0`, `next_openid: ""`. The test
+  account still has **zero followers**, so follower-dependent reads have no live
+  data and broadcasts have no recipients (non-polluting by construction).
+- **AppID/AppSecret are intentionally not recorded.** Only aggregate pass/fail,
+  WeChat return codes, and exit codes — no openids, msg_ids, tokens, or secrets.
+
+### Live API probe results (real round-trips)
+
+Each command was driven to a **real** `api.weixin.qq.com` call to observe the
+genuine upstream return code per the test account's permission grant.
+
+| Command | Classification | Live result |
+|---|---|---|
+| `user info-batch --openids` | **live** | Real batchget call; invalid openids → upstream `40003` mapped per-item to `E_VALIDATION`; `items[]`/`summary` aggregated correctly (see below). |
+| `message mass sendall --to-all` | **live, permission OK** | Real call returned `errcode:0` "send job submission success" + a sandbox `msg_id`. Test account **has** sendall permission; 0 followers → no recipients reached. |
+| `message mass send --openids` | **live, permission restricted (48001)** | Real call returned WeChat `48001 api unauthorized` → `E_FORBIDDEN`, exit 4. **Openid-list mass send is not authorized on the test account.** |
+| `message mass preview` | **live, permission OK** | Real call returned `40003 invalid openid` (not 48001) → `E_VALIDATION`. The API accepted the request and only rejected the synthetic openid; preview permission is present. |
+| `message mass get --msg-id` | **live** | Real call with a bogus id returned `40059 invalid msg id` → `E_VALIDATION`. Read permission present. |
+| `message mass delete --msg-id` | **live** | Real call with a bogus id returned `40059 invalid msg id` → `E_VALIDATION`. Delete reached real API; only the bogus id was rejected. No real message recalled. |
+
+**Permission summary:** on this test account only the **openid-list `mass send`**
+returned `48001 api unauthorized`. `sendall`, `preview`, `get`, and `delete` all
+reached genuine API behavior (`errcode:0` or content-level errors), so they are
+**not** permission-restricted here.
+
+### user info-batch aggregation (live)
+
+Input `--openids o_fake_BBB,o_fake_AAA,o_fake_BBB --openids o_fake_AAA,o_fake_CCC`
+resolved to exactly `[BBB, AAA, CCC]` — **de-duplicated, input order preserved**.
+All three failed at the live batchget call (`40003`); the chunk-level error
+mapped onto **every item** as `E_VALIDATION`, `summary{total:3,succeeded:0,failed:3}`
+(counts equal the item tally), and the envelope carried `_untrusted:["items"]`.
+The follower-success path and `E_NOT_FOUND` ghost-item path remain mock-verified
+only (no real followers to exercise them).
+
+### Guards & gating (real creds present, so gates run for real)
+
+| Contract point | Result | Method |
+|---|---|---|
+| `--dangerous` second gate (critical `sendall`) | PASS | Without `--dangerous`: `E_CONFIRMATION_REQUIRED`, exit 5. With `--dangerous --dry-run`: confirm token + `expires_at` issued. |
+| Single-use confirm replay | PASS | `send` confirm token consumed by first call (token burned **before** the write, so even the 48001 failure consumed it); replay → `E_CONFLICT`, exit 6. |
+| Audience guard — neither `--to-all` nor `--tag-id` | PASS | `E_VALIDATION` "set --to-all or a positive --tag-id", exit 2. |
+| Audience guard — `--to-all` **and** `--tag-id` together | **OBSERVATION / gap** | **Not rejected.** `--to-all` silently wins (`audience:"all followers"`); the command does not enforce mutual exclusion when both are set (`message.go` only requires a tag when `!toAll`). Expected a usage error per the mutual-exclusion intent; recorded honestly as a gap, not a pass. |
+| Body guard — no body | PASS | `E_VALIDATION` "a message body is required", exit 2. |
+| Body guard — both `--text` and `--mpnews-media-id` | PASS | `E_VALIDATION` "set only one of …", exit 2. |
+| `mass get` / `info-batch` validation precedence | PASS | `--msg-id 0` and empty `--openids` → `E_VALIDATION` before any API call. |
+| Dry-run envelopes (all batch cmds) | PASS | `send`/`preview`/`delete`/`sendall` dry-run all emit `operation` + `preview` + `confirm_token` + `expires_at`; `send` preview shows de-duped `targets[]` + `total`. |
+
+### Honest classification per command
+
+| Command | Grade |
+|---|---|
+| `user info-batch` | **live** (validation + per-item aggregation against real API; success path mock-only) |
+| `message mass sendall` | **live**, permission OK (0 followers → no recipients) |
+| `message mass send` | **live**, **permission restricted (48001)** |
+| `message mass preview` | **live**, permission OK (only synthetic openid rejected) |
+| `message mass get` | **live** |
+| `message mass delete` | **live** (real API reached; only bogus id rejected) |
+
+One gap found this round: `mass sendall` does not reject `--to-all` + `--tag-id`
+supplied together (see guards table). No test account pollution occurred.
+
 ## Result by class
 
 ### Auth + token — PASS
