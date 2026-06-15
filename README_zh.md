@@ -3,7 +3,7 @@
 [English](README.md) | [中文](README_zh.md)
 
 [![CI](https://github.com/fatecannotbealtered/wechat-mp-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/fatecannotbealtered/wechat-mp-cli/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@fatecannotbealtered-/wechat-mp-cli.svg)](https://www.npmjs.com/package/@fatecannotbealtered-/wechat-mp-cli)
+[![npm version](https://img.shields.io/npm/v/@ananke/wechat-mp-cli.svg)](https://www.npmjs.com/package/@ananke/wechat-mp-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 面向 AI Agent 的微信公众号 CLI。当前阶段走 API-first 路线：账号配置、token 检查、图片处理与上传、Markdown 创建草稿、草稿管理、发布生命周期、留言管理、图文统计、永久/临时素材、自定义菜单、远程 API 代理辅助和 webhook 验签。
@@ -23,7 +23,7 @@
 ## 安装
 
 ```bash
-npm install -g @fatecannotbealtered-/wechat-mp-cli
+npm install -g @ananke/wechat-mp-cli
 npx skills add fatecannotbealtered/wechat-mp-cli -y -g
 ```
 
