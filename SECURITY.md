@@ -2,11 +2,11 @@
 
 *English | [中文](SECURITY_zh.md)*
 
-Security policy for **wechat-mp-cli** (@ananke/wechat-mp-cli) — AI-native CLI for WeChat Official Account drafting, publishing, assets, comments, analytics, menus, users, and webhooks.
+Security policy for **wechat-mp-cli** (@fateforge/wechat-mp-cli) — AI-native CLI for WeChat Official Account drafting, publishing, assets, comments, analytics, menus, users, and webhooks.
 
 ## Supported Versions
 
-Security fixes are applied to the **latest minor release** on the default branch. Older minors do not receive backports. Release binaries are published via GitHub Releases (`fatecannotbealtered/wechat-mp-cli`) and the npm package `@ananke/wechat-mp-cli`.
+Security fixes are applied to the **latest minor release** on the default branch. Older minors do not receive backports. Release binaries are published via GitHub Releases (`fatecannotbealtered/wechat-mp-cli`) and the npm package `@fateforge/wechat-mp-cli`.
 
 | Version | Supported |
 |---------|-----------|

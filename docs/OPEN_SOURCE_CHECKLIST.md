@@ -19,7 +19,7 @@ Run through this gate **before the first public push** of `wechat-mp-cli`. It is
 - [ ] `README.md` and `README_zh.md` are **content-synced** — same sections, same commands, same placeholders resolved to the same real values.
 - [ ] `CHANGELOG.md` exists, uses Keep a Changelog format, and has an `## [Unreleased]` section on top.
 - [ ] `LICENSE` is present, the license is chosen deliberately (default MIT), and `2026` / `Sean Guo` are filled in.
-- [ ] Install blocks are copy-paste-runnable and use the real published `@ananke/wechat-mp-cli` / `fatecannotbealtered/wechat-mp-cli`.
+- [ ] Install blocks are copy-paste-runnable and use the real published `@fateforge/wechat-mp-cli` / `fatecannotbealtered/wechat-mp-cli`.
 
 ## Governance
 

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- npm scope 迁移 `@fatecannotbealtered-` → `@ananke`（无横线 org 在 npm 被占，迁移到 `@ananke`）。主包与各平台包（`@ananke/wechat-mp-cli-<os>-<arch>`）一并改名；GitHub org / go module path（`github.com/fatecannotbealtered/...`）与 release 源保持不变。
+- npm scope 迁移 `@fatecannotbealtered-` → `@fateforge`（无横线 org 在 npm 被占，迁移到 `@fateforge`）。主包与各平台包（`@fateforge/wechat-mp-cli-<os>-<arch>`）一并改名；GitHub org / go module path（`github.com/fatecannotbealtered/...`）与 release 源保持不变。
 
 ### Fixed
 
