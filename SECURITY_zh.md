@@ -2,11 +2,11 @@
 
 *[English](SECURITY.md) | 中文*
 
-**wechat-mp-cli**（@fatecannotbealtered-/wechat-mp-cli）的安全策略 —— AI-native CLI for WeChat Official Account drafting, publishing, assets, comments, analytics, menus, users, and webhooks。
+**wechat-mp-cli**（@ananke/wechat-mp-cli）的安全策略 —— AI-native CLI for WeChat Official Account drafting, publishing, assets, comments, analytics, menus, users, and webhooks。
 
 ## 支持的版本
 
-安全修复只应用于默认分支上的**最新 minor 版本**，旧 minor 不做回移植。发布二进制通过 GitHub Releases（`fatecannotbealtered/wechat-mp-cli`）和 npm 包 `@fatecannotbealtered-/wechat-mp-cli` 分发。
+安全修复只应用于默认分支上的**最新 minor 版本**，旧 minor 不做回移植。发布二进制通过 GitHub Releases（`fatecannotbealtered/wechat-mp-cli`）和 npm 包 `@ananke/wechat-mp-cli` 分发。
 
 | 版本 | 是否支持 |
 |------|----------|

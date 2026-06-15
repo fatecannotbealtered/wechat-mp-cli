@@ -19,7 +19,7 @@
 - [ ] `README.md` 与 `README_zh.md` **内容同步** —— 章节一致、命令一致、占位符解析为相同的真实值。
 - [ ] `CHANGELOG.md` 存在，使用 Keep a Changelog 格式，顶部有 `## [Unreleased]` 小节。
 - [ ] `LICENSE` 存在，许可证经过有意选择（默认 MIT），`2026` / `Sean Guo` 已填写。
-- [ ] 安装块可直接复制运行，使用真实已发布的 `@fatecannotbealtered-/wechat-mp-cli` / `fatecannotbealtered/wechat-mp-cli`。
+- [ ] 安装块可直接复制运行，使用真实已发布的 `@ananke/wechat-mp-cli` / `fatecannotbealtered/wechat-mp-cli`。
 
 ## 治理
 

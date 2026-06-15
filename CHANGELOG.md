@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-15
+
 ### Added
 
 - Batch operations (CLI-SPEC §15): `message mass sendall`/`send`/`preview`/`get`/`delete` broadcast a message to all followers, a tag, or an explicit openid list (≤10000, one async job) — all gated by `--dry-run` → `--confirm` plus `--dangerous` for the critical/high writes; poll delivery with `message mass get --msg-id`. `user info-batch --openids` fetches up to 100 follower profiles per call, auto-chunking longer lists, and returns one aggregated `items[]` (keyed by openid `target`) plus a `summary{total,succeeded,failed}` so a per-item failure never fails the whole command (`--continue-on-error`, default `true`).
+
+### Changed
+
+- npm scope 迁移 `@fatecannotbealtered-` → `@ananke`（无横线 org 在 npm 被占，迁移到 `@ananke`）。主包与各平台包（`@ananke/wechat-mp-cli-<os>-<arch>`）一并改名；GitHub org / go module path（`github.com/fatecannotbealtered/...`）与 release 源保持不变。
 
 ### Fixed
 
