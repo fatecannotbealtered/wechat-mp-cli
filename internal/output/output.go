@@ -22,6 +22,7 @@ const (
 	ErrRateLimited          = "E_RATE_LIMITED"
 	ErrServer               = "E_SERVER"
 	ErrTimeout              = "E_TIMEOUT"
+	ErrIntegrity            = "E_INTEGRITY"
 )
 
 var (
