@@ -39,23 +39,30 @@ func init() {
 }
 
 func runUpdate(cmd *cobra.Command, _ []string) error {
-	rel, err := fetchBinaryRelease(cmd.Context(), updateTargetVersion)
-	if err != nil {
-		return fail(ExitRetryable, output.ErrNetwork, "checking release: "+err.Error(), true)
-	}
-	target := normalizeVersion(updateTargetVersion)
-	if target == "" {
-		target = normalizeVersion(rel.TagName)
-	}
 	skillCommand := updateSkillSyncCommand()
 
-	available, versionKnown := false, false
-	if cmp, ok := compareVersions(version, rel.TagName); ok {
-		versionKnown = true
-		available = cmp < 0 || (strings.TrimSpace(updateTargetVersion) != "" && target != normalizeVersion(version))
-	}
-
+	// --check is a best-effort read: a network / rate-limit failure must not be a
+	// hard error, otherwise an offline check looks like a broken tool.
 	if updateCheck {
+		rel, err := fetchBinaryRelease(cmd.Context(), updateTargetVersion)
+		if err != nil {
+			return printData(map[string]any{
+				"current_version":    version,
+				"update_available":   false,
+				"install_method":     "github-binary",
+				"signature_status":   "not_checked",
+				"skill_sync_command": skillCommand,
+				"error":              "could not reach GitHub releases: " + err.Error(),
+			})
+		}
+		target := normalizeVersion(updateTargetVersion)
+		if target == "" {
+			target = normalizeVersion(rel.TagName)
+		}
+		available := false
+		if cmp, ok := compareVersions(version, rel.TagName); ok {
+			available = cmp < 0 || (strings.TrimSpace(updateTargetVersion) != "" && target != normalizeVersion(version))
+		}
 		return printData(map[string]any{
 			"current_version":    version,
 			"latest_version":     rel.TagName,
@@ -67,15 +74,12 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 			"skill_sync_command": skillCommand,
 		})
 	}
-	if versionKnown && !available && strings.TrimSpace(updateTargetVersion) == "" {
-		return printData(map[string]any{
-			"current_version":  version,
-			"latest_version":   rel.TagName,
-			"update_available": false,
-			"status":           "up_to_date",
-		})
-	}
 
+	// Write path: the release is fetched and verified only at --confirm execution
+	// (performBinaryUpdate). The dry-run preview and confirm-token binding use the
+	// requested target (empty = latest), so dry-run is offline and a bare write
+	// returns E_CONFIRMATION_REQUIRED before any network call.
+	target := normalizeVersion(updateTargetVersion)
 	payload := updateConfirmPayload{TargetVersion: target, SkillSyncCommand: skillCommand}
 	preview := map[string]any{
 		"action": "update wechat-mp-cli",
