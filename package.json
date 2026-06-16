@@ -1,6 +1,6 @@
 {
   "name": "@fateforge/wechat-mp-cli",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AI-native CLI for WeChat Official Account drafting, publishing, assets, comments, analytics, menus, users, and webhooks",
   "keywords": [
     "wechat",

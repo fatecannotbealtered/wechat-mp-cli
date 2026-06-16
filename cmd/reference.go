@@ -322,7 +322,7 @@ var commandExamples = map[string][]string{
 	"doctor":                              {"wechat-mp-cli doctor --compact"},
 	"reference":                           {"wechat-mp-cli reference --compact"},
 	"changelog":                           {"wechat-mp-cli changelog --compact"},
-	"update":                              {"wechat-mp-cli update --check --compact"},
+	"update":                              {"wechat-mp-cli update --check --compact", "wechat-mp-cli update --dry-run --compact", "wechat-mp-cli update --confirm <confirm_token> --compact"},
 }
 
 // referenceSchemas describes the success-payload shape behind every output_schema
@@ -390,7 +390,7 @@ func referenceSchemas() map[string]referenceDataSchema {
 		"doctor":             {Shape: "object", Fields: []string{"ok", "config_path", "checks", "notices"}},
 		"reference":          {Shape: "object", Fields: []string{"schema_version", "tool", "version", "risk_tier", "blast_radius", "release_readiness", "security", "exit_codes", "global_flags", "commands", "schemas"}},
 		"changelog":          {Shape: "object", Fields: []string{"since", "text"}},
-		"update_report":      {Shape: "object", Fields: []string{"current_version", "check_requested", "update_available", "message"}},
+		"update_report":      {Shape: "object", Fields: []string{"status", "current_version", "latest_version", "target_version", "previous_version", "update_available", "release_url", "install_method", "signature_status", "signature_verified", "skill_sync_command", "skill_sync_status", "next_step"}},
 		"write_preview":      {Shape: "object", Fields: []string{"operation", "preview", "confirm_token", "expires_at"}},
 	}
 }
