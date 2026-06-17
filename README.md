@@ -1,10 +1,25 @@
-# wechat-mp-cli
+<h1 align="center">wechat-mp-cli</h1>
 
-[English](README.md) | [中文](README_zh.md)
+<p align="center">
+  <strong>Agent-native WeChat Official Account CLI &middot; JSON-first &middot; dry-run guarded</strong>
+</p>
 
-[![CI](https://github.com/fatecannotbealtered/wechat-mp-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/fatecannotbealtered/wechat-mp-cli/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@fateforge/wechat-mp-cli.svg)](https://www.npmjs.com/package/@fateforge/wechat-mp-cli)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <a href="README.md">English</a> &middot; <a href="README_zh.md">中文</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/fatecannotbealtered/wechat-mp-cli/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/fatecannotbealtered/wechat-mp-cli/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI"></a>
+  <a href="https://goreportcard.com/report/github.com/fatecannotbealtered/wechat-mp-cli"><img alt="Go Report" src="https://img.shields.io/badge/Go%20Report-checked-00ADD8?style=for-the-badge&logo=go&logoColor=white"></a>
+  <a href="https://www.npmjs.com/package/@fateforge/wechat-mp-cli"><img alt="npm" src="https://img.shields.io/npm/v/@fateforge/wechat-mp-cli?style=for-the-badge&logo=npm&logoColor=white&label=npm&color=CB3837"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-7C3AED?style=for-the-badge"></a>
+</p>
+
+<p align="center">
+  <img alt="Agent native" src="https://img.shields.io/badge/agent-native-111827?style=for-the-badge">
+  <img alt="JSON first" src="https://img.shields.io/badge/output-JSON--first-0891B2?style=for-the-badge">
+  <img alt="Dry-run guarded" src="https://img.shields.io/badge/writes-dry--run%20guarded-F59E0B?style=for-the-badge">
+</p>
 
 AI-native CLI for WeChat Official Account operations. The current milestone is API-first: account setup, token checks, image processing/upload, Markdown-to-draft creation, draft management, publish lifecycle, comments, article analytics, permanent and temporary materials, custom menus, remote API proxy helpers, and webhook verification.
 
