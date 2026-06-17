@@ -23,7 +23,9 @@
 ## 安装
 
 ```bash
+# 安装 CLI（全局 npm）。
 npm install -g @fateforge/wechat-mp-cli
+# 安装 Agent Skill —— 复制到你 agent 支持的 skills 目录。
 npx skills add fatecannotbealtered/wechat-mp-cli -y -g
 ```
 
