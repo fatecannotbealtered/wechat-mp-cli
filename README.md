@@ -23,7 +23,9 @@ Worst-case risk tier: **T2**. This tool can create drafts and submit public publ
 ## Install
 
 ```bash
+# Install the CLI (global npm).
 npm install -g @fateforge/wechat-mp-cli
+# Install the Agent Skill — copies into your agent-supported skills directory.
 npx skills add fatecannotbealtered/wechat-mp-cli -y -g
 ```
 
