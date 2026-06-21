@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-06-21
+
+### Changed
+
+- `update` is now a **single command with no confirm token**: a bare `wechat-mp-cli update` performs the whole self-update in one call (resolve latest or `--target-version` → verify signature → verify checksum → replace binary → sync Skill). Self-update is exempt from the `--dry-run` → `--confirm <token>` write gate; the safety guarantee is the in-process Sigstore verification, not an agent's review of a preview. `--check` and `--dry-run` remain optional read-only flags, and `--dry-run` no longer issues a `confirm_token` / `expires_at`. `update` is idempotent: already-latest returns `ok` with a no-op result. (Other data-write commands keep their dry-run → confirm flow unchanged.)
+
+### Added
+
+- Staged update failure & interruption envelope: every `update` failure carries `stage` (`discover|download|verify_signature|verify_checksum|replace|skill_sync`), `current_version`, `binary_replaced`, and `skill_sync_status` so an agent always knows its post-failure state. A SIGINT/SIGTERM during `update` still emits a terminal JSON envelope (`E_INTERRUPTED`, exit 130), cleans the temp dir, and states the true post-state.
+- Error codes `E_IO` (exit 1) and `E_INTERRUPTED` (exit 130).
+
+### Fixed
+
+- `update` replace-stage local failures (temp dir, extract, file write/rename, disk) now classify as `E_IO` (exit 1), and permission failures as `E_FORBIDDEN` (exit 4), instead of being misreported as a retryable `E_NETWORK`. A Skill-sync failure *after* a successful binary swap is now reported as **partial success** (`ok:false`, `binary_replaced:true`, retryable, with `skill_sync_command`) instead of a hard `E_NETWORK` that lost the fact the binary already updated. Integrity failures remain non-retryable `E_INTEGRITY` (unchanged).
+
 ## [1.0.5] - 2026-06-16
 
 ### Fixed

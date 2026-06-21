@@ -44,6 +44,11 @@ npm install -g @fateforge/wechat-mp-cli
 npx skills add fatecannotbealtered/wechat-mp-cli -y -g
 ```
 
+升级：`wechat-mp-cli update` 是单条命令 —— 一次调用即可解析最新版本
+（或 `--target-version`）、在进程内校验 Sigstore 签名与校验和、替换二进制并
+同步 Skill，**不需要 confirm token**。`--check` 是只读探测，`--dry-run` 是只读
+预览（都不再发放 token）；`update` 是幂等的，agent 可放心反复调用。
+
 本地开发：
 
 ```bash

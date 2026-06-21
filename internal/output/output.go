@@ -23,6 +23,8 @@ const (
 	ErrServer               = "E_SERVER"
 	ErrTimeout              = "E_TIMEOUT"
 	ErrIntegrity            = "E_INTEGRITY"
+	ErrIO                   = "E_IO"
+	ErrInterrupted          = "E_INTERRUPTED"
 )
 
 var (

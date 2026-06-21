@@ -322,7 +322,7 @@ var commandExamples = map[string][]string{
 	"doctor":                              {"wechat-mp-cli doctor --compact"},
 	"reference":                           {"wechat-mp-cli reference --compact"},
 	"changelog":                           {"wechat-mp-cli changelog --compact"},
-	"update":                              {"wechat-mp-cli update --check --compact", "wechat-mp-cli update --dry-run --compact", "wechat-mp-cli update --confirm <confirm_token> --compact"},
+	"update":                              {"wechat-mp-cli update --compact", "wechat-mp-cli update --check --compact", "wechat-mp-cli update --dry-run --compact"},
 }
 
 // referenceSchemas describes the success-payload shape behind every output_schema

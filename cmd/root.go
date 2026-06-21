@@ -17,15 +17,16 @@ import (
 )
 
 const (
-	ExitOK        = 0
-	ExitError     = 1
-	ExitBadArgs   = 2
-	ExitNotFound  = 3
-	ExitAuth      = 4
-	ExitConfirm   = 5
-	ExitConflict  = 6
-	ExitRetryable = 7
-	ExitTimeout   = 8
+	ExitOK          = 0
+	ExitError       = 1
+	ExitBadArgs     = 2
+	ExitNotFound    = 3
+	ExitAuth        = 4
+	ExitConfirm     = 5
+	ExitConflict    = 6
+	ExitRetryable   = 7
+	ExitTimeout     = 8
+	ExitInterrupted = 130
 )
 
 const (

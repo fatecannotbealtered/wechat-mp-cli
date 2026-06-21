@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 
 	"github.com/fatecannotbealtered/wechat-mp-cli/internal/output"
@@ -12,12 +13,7 @@ var (
 	updateTargetVersion string
 )
 
-type updateConfirmPayload struct {
-	TargetVersion    string `json:"target_version"`
-	SkillSyncCommand string `json:"skill_sync_command"`
-}
-
-var updateCmd = writeCommand(&cobra.Command{
+var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update wechat-mp-cli to a verified GitHub release and sync the Skill",
 	Long: `Download the matching GitHub Release binary, verify the Sigstore signature on
@@ -26,11 +22,13 @@ verify the archive SHA256, replace the running binary, and sync the Skill
 directory. An unsigned or unverifiable release is refused; there is no skip path
 and no dependency on npm/go/pip being installed.
 
-Use --check to inspect availability. Writes require --dry-run first, then
---confirm <confirm_token>.`,
+A bare 'update' performs the whole update in one call — self-update is a single,
+self-verifying operation and takes no confirm token. Use --check for a read-only
+probe and --dry-run for a read-only preview of the plan; neither changes
+anything.`,
 	Args: cobra.NoArgs,
 	RunE: runUpdate,
-}, "medium", "replaces the local wechat-mp-cli binary and syncs the Skill directory")
+}
 
 func init() {
 	updateCmd.Flags().BoolVar(&updateCheck, "check", false, "Check whether a newer version is available without installing")
@@ -44,67 +42,74 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	// --check is a best-effort read: a network / rate-limit failure must not be a
 	// hard error, otherwise an offline check looks like a broken tool.
 	if updateCheck {
-		rel, err := fetchBinaryRelease(cmd.Context(), updateTargetVersion)
-		if err != nil {
-			return printData(map[string]any{
-				"current_version":    version,
-				"update_available":   false,
-				"install_method":     "github-binary",
-				"signature_status":   "not_checked",
-				"skill_sync_command": skillCommand,
-				"error":              "could not reach GitHub releases: " + err.Error(),
-			})
-		}
-		target := normalizeVersion(updateTargetVersion)
-		if target == "" {
-			target = normalizeVersion(rel.TagName)
-		}
-		available := false
-		if cmp, ok := compareVersions(version, rel.TagName); ok {
-			available = cmp < 0 || (strings.TrimSpace(updateTargetVersion) != "" && target != normalizeVersion(version))
-		}
+		return runUpdateCheck(cmd.Context(), skillCommand)
+	}
+
+	target := normalizeVersion(updateTargetVersion)
+
+	// --dry-run is a read-only preview of the plan. It is no longer a gate: it
+	// issues NO confirm_token and NO expires_at, and is never required before a
+	// bare `update`.
+	if dryRun {
 		return printData(map[string]any{
-			"current_version":    version,
-			"latest_version":     rel.TagName,
-			"target_version":     target,
-			"update_available":   available,
-			"release_url":        rel.HTMLURL,
-			"install_method":     "github-binary",
-			"signature_status":   "not_checked",
+			"action":          "update wechat-mp-cli",
+			"current_version": version,
+			"target_version":  target,
+			"changes": []map[string]any{
+				{"operation": "download, verify signature + checksum, replace binary", "target_version": target},
+				{"operation": "sync skill directory", "command": skillCommand},
+			},
 			"skill_sync_command": skillCommand,
 		})
 	}
 
-	// Write path: the release is fetched and verified only at --confirm execution
-	// (performBinaryUpdate). The dry-run preview and confirm-token binding use the
-	// requested target (empty = latest), so dry-run is offline and a bare write
-	// returns E_CONFIRMATION_REQUIRED before any network call.
-	target := normalizeVersion(updateTargetVersion)
-	payload := updateConfirmPayload{TargetVersion: target, SkillSyncCommand: skillCommand}
-	preview := map[string]any{
-		"action": "update wechat-mp-cli",
-		"changes": []map[string]any{
-			{"operation": "download, verify signature + checksum, replace binary", "target_version": target},
-			{"operation": "sync skill directory", "command": skillCommand},
-		},
-	}
-	proceed, err := confirmWrite("update wechat-mp-cli", payload, preview)
-	if !proceed {
-		return err
+	// Single command, no confirm token: resolve -> verify integrity -> replace
+	// binary -> sync Skill, all in one call. Self-update is exempt from the §7
+	// write gate; the safety guarantee is the in-process signature verification.
+	ctx := cmd.Context()
+
+	// Idempotent: when already on the resolved (latest or requested) version,
+	// return ok with a no-op result so an agent may call update freely.
+	if rel, derr := fetchBinaryRelease(ctx, target); derr == nil {
+		resolved := target
+		if resolved == "" {
+			resolved = normalizeVersion(rel.TagName)
+		}
+		if cmp, ok := compareVersions(version, resolved); ok && cmp >= 0 {
+			return printData(map[string]any{
+				"status":             "noop",
+				"previous_version":   version,
+				"current_version":    version,
+				"binary_replaced":    false,
+				"update_available":   false,
+				"skill_sync_status":  "skipped",
+				"skill_sync_command": skillCommand,
+			})
+		}
 	}
 
-	// Download + verify (in-process Sigstore) + checksum + replace binary.
-	status, sigStatus, _, err := performBinaryUpdate(cmd.Context(), target)
+	status, sigStatus, resolved, stage, err := performBinaryUpdate(ctx, target)
 	if err != nil {
-		if isIntegrityError(err) {
-			// Non-retryable: a missing/invalid signature or checksum mismatch is a
-			// supply-chain red flag, not a transient blip.
-			return fail(ExitError, output.ErrIntegrity, err.Error(), false)
-		}
-		return fail(ExitRetryable, output.ErrNetwork, "update failed: "+err.Error(), true)
+		return reportUpdateFailure(ctx, stage, err, skillCommand)
 	}
-	if err := updateSkillSync(cmd.Context(), updateSkillRepo); err != nil {
-		return fail(ExitRetryable, output.ErrNetwork, "syncing skill directory: "+err.Error(), true)
+
+	// Binary is now on the new version. Skill sync runs AFTER the swap and is
+	// independently replayable; a failure here is PARTIAL SUCCESS, not a hard
+	// error, so the agent knows it is on the new binary.
+	if err := updateSkillSync(ctx, updateSkillRepo); err != nil {
+		if ctx.Err() != nil {
+			return reportUpdateInterrupted(updateStageSkillSync, resolved, true, skillCommand)
+		}
+		return failWithDetails(ExitError, output.ErrNetwork,
+			"binary updated to "+resolved+" but skill sync failed: "+err.Error(),
+			map[string]any{
+				"stage":              updateStageSkillSync,
+				"current_version":    resolved,
+				"binary_replaced":    true,
+				"skill_sync_status":  "failed",
+				"skill_sync_command": skillCommand,
+				"next_step":          "run \"" + skillCommand + "\", then \"wechat-mp-cli changelog --since " + version + "\"",
+			}, true)
 	}
 
 	resultStatus := "updated"
@@ -114,11 +119,109 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	return printData(map[string]any{
 		"status":             resultStatus,
 		"previous_version":   version,
-		"current_version":    target,
+		"current_version":    resolved,
+		"binary_replaced":    true,
 		"signature_status":   sigStatus,
 		"signature_verified": sigStatus == "verified",
 		"skill_sync_status":  "synced",
 		"skill_sync_command": skillCommand,
 		"next_step":          "run \"wechat-mp-cli changelog --since " + version + "\" to see what changed",
 	})
+}
+
+func runUpdateCheck(ctx context.Context, skillCommand string) error {
+	rel, err := fetchBinaryRelease(ctx, updateTargetVersion)
+	if err != nil {
+		return printData(map[string]any{
+			"current_version":    version,
+			"update_available":   false,
+			"install_method":     "github-binary",
+			"signature_status":   "not_checked",
+			"skill_sync_command": skillCommand,
+			"error":              "could not reach GitHub releases: " + err.Error(),
+		})
+	}
+	target := normalizeVersion(updateTargetVersion)
+	if target == "" {
+		target = normalizeVersion(rel.TagName)
+	}
+	available := false
+	if cmp, ok := compareVersions(version, rel.TagName); ok {
+		available = cmp < 0 || (strings.TrimSpace(updateTargetVersion) != "" && target != normalizeVersion(version))
+	}
+	return printData(map[string]any{
+		"current_version":    version,
+		"latest_version":     rel.TagName,
+		"target_version":     target,
+		"update_available":   available,
+		"release_url":        rel.HTMLURL,
+		"install_method":     "github-binary",
+		"signature_status":   "not_checked",
+		"skill_sync_command": skillCommand,
+	})
+}
+
+// reportUpdateFailure builds the staged failure envelope. Everything before the
+// binary swap leaves the installed binary untouched, so the post-state is always
+// "still on the running version", binary_replaced=false. The failure is
+// classified by the agent's next action, not the raw cause.
+func reportUpdateFailure(ctx context.Context, stage string, err error, skillCommand string) error {
+	// An interrupt (SIGINT/SIGTERM cancels the context) takes precedence: the
+	// real cause is the cancellation, not a downstream symptom.
+	if ctx.Err() != nil {
+		return reportUpdateInterrupted(stage, version, false, skillCommand)
+	}
+
+	details := map[string]any{
+		"stage":              stage,
+		"current_version":    version,
+		"binary_replaced":    false,
+		"skill_sync_status":  "skipped",
+		"skill_sync_command": skillCommand,
+	}
+
+	// Integrity failure: fail closed, non-retryable. A forged or corrupt release
+	// is not a transient blip to loop on.
+	if isIntegrityError(err) {
+		return failWithDetails(ExitError, output.ErrIntegrity, err.Error(), details, false)
+	}
+
+	// Replace-stage local failure: permission -> E_FORBIDDEN (exit 4); other
+	// io/disk -> E_IO (exit 1). Never the retryable network class.
+	if re, ok := asReplaceError(err); ok {
+		if re.permission {
+			return failWithDetails(ExitAuth, output.ErrForbidden,
+				"update failed during replace: "+err.Error(), details, false)
+		}
+		return failWithDetails(ExitError, output.ErrIO,
+			"update failed during replace: "+err.Error(), details, false)
+	}
+
+	// discover / download: network / timeout / rate-limit, retryable. Re-running
+	// `update` is idempotent.
+	return failWithDetails(ExitRetryable, output.ErrNetwork, "update failed: "+err.Error(), details, true)
+}
+
+// reportUpdateInterrupted emits the terminal JSON envelope after a SIGINT/SIGTERM
+// so an interrupted agent always receives a parseable terminal state. The
+// message states the version the tool is actually running now per the stage
+// invariant: before the swap -> no change; after the swap during skill_sync ->
+// partial success on the new binary.
+func reportUpdateInterrupted(stage, currentVersion string, binaryReplaced bool, skillCommand string) error {
+	details := map[string]any{
+		"stage":              stage,
+		"current_version":    currentVersion,
+		"binary_replaced":    binaryReplaced,
+		"skill_sync_command": skillCommand,
+	}
+	var msg string
+	if binaryReplaced {
+		details["skill_sync_status"] = "failed"
+		msg = "update interrupted after binary replace: now on " + currentVersion +
+			"; run \"" + skillCommand + "\", then \"wechat-mp-cli changelog --since " + version + "\""
+	} else {
+		details["skill_sync_status"] = "skipped"
+		msg = "update cancelled, no change, still on " + currentVersion + " — re-run \"wechat-mp-cli update\", it is idempotent"
+	}
+	return failWithDetails(ExitInterrupted, output.ErrInterrupted, msg, details, true)
 }

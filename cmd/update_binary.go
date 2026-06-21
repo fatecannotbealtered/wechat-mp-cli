@@ -49,6 +49,30 @@ func isIntegrityError(err error) bool {
 	return errors.As(err, &ie)
 }
 
+// replaceError marks a local failure during the replace stage (extract / file
+// write / rename). permission distinguishes a permission denial (E_FORBIDDEN,
+// exit 4) from a generic io/disk failure (E_IO, exit 1). These are local
+// environment problems, never the retryable network class.
+type replaceError struct {
+	err        error
+	permission bool
+}
+
+func (e *replaceError) Error() string { return e.err.Error() }
+func (e *replaceError) Unwrap() error { return e.err }
+
+func newReplaceError(err error) error {
+	return &replaceError{err: err, permission: errors.Is(err, os.ErrPermission)}
+}
+
+func asReplaceError(err error) (*replaceError, bool) {
+	var re *replaceError
+	if errors.As(err, &re) {
+		return re, true
+	}
+	return nil, false
+}
+
 // Testable seams.
 var (
 	updateBinaryHTTPClient = &http.Client{Timeout: 2 * time.Minute}
@@ -79,68 +103,94 @@ type updateApplyResult struct {
 
 // performBinaryUpdate downloads, verifies, and installs the target release
 // binary. It returns the install status, the signature status (always
-// "verified" on success), and the installed path. Integrity failures are
-// wrapped so the caller can classify them as non-retryable.
-func performBinaryUpdate(ctx context.Context, targetVersion string) (status, signatureStatus, installedPath string, err error) {
+// "verified" on success), the installed path, the stage reached, and the error.
+// The stage lets the caller build an honest failure envelope: everything up to
+// and including verify_checksum touches only a temp dir (binary untouched);
+// replace is the atomic commit point. Integrity failures are wrapped as
+// non-retryable; replace-stage local failures are wrapped as replaceError so
+// they are classified E_IO / E_FORBIDDEN, never the retryable network class.
+func performBinaryUpdate(ctx context.Context, targetVersion string) (status, signatureStatus, resolvedVersion, stage string, err error) {
+	stage = updateStageDiscover
 	exe, err := updateBinaryExecutable()
 	if err != nil {
-		return "", "", "", fmt.Errorf("resolving current executable: %w", err)
+		return "", "", "", stage, fmt.Errorf("resolving current executable: %w", err)
 	}
 	rel, err := fetchBinaryRelease(ctx, targetVersion)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", stage, err
 	}
 	target := normalizeVersion(rel.TagName)
 	if target == "" {
-		return "", "", "", errors.New("release is missing tag_name")
+		return "", "", "", stage, errors.New("release is missing tag_name")
 	}
 	assetName, err := updateArchiveName(target)
 	if err != nil {
-		return "", "", "", err
+		return "", "", target, stage, err
 	}
 	assetURL := findUpdateAssetURL(rel.Assets, assetName)
 	if assetURL == "" {
-		return "", "", "", fmt.Errorf("release %s does not include asset %s", rel.TagName, assetName)
+		return "", "", target, stage, fmt.Errorf("release %s does not include asset %s", rel.TagName, assetName)
 	}
 	checksumURL := findUpdateAssetURL(rel.Assets, "checksums.txt")
 	if checksumURL == "" {
-		return "", "", "", fmt.Errorf("release %s does not include checksums.txt", rel.TagName)
+		return "", "", target, stage, fmt.Errorf("release %s does not include checksums.txt", rel.TagName)
 	}
 	bundleURL := findUpdateAssetURL(rel.Assets, "checksums.txt.sigstore.json")
 
 	tmpDir, err := os.MkdirTemp("", "wechat-mp-cli-update-*")
 	if err != nil {
-		return "", "", "", fmt.Errorf("creating temp dir: %w", err)
+		return "", "", target, updateStageReplace, newReplaceError(fmt.Errorf("creating temp dir: %w", err))
 	}
+	// Always clean the temp dir, including on interrupt: a partial download must
+	// never be trusted by a later run.
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	stage = updateStageDownload
 	archivePath := filepath.Join(tmpDir, assetName)
 	if err := downloadUpdateFile(ctx, assetURL, archivePath); err != nil {
-		return "", "", "", fmt.Errorf("downloading archive: %w", err)
+		return "", "", target, stage, fmt.Errorf("downloading archive: %w", err)
 	}
 	checksumPath := filepath.Join(tmpDir, "checksums.txt")
 	if err := downloadUpdateFile(ctx, checksumURL, checksumPath); err != nil {
-		return "", "", "", fmt.Errorf("downloading checksums: %w", err)
+		return "", "", target, stage, fmt.Errorf("downloading checksums: %w", err)
 	}
 
+	stage = updateStageVerifySignature
 	signatureStatus, err = verifyUpdateChecksumSignature(ctx, checksumPath, bundleURL, tmpDir)
 	if err != nil {
-		return "", "", "", newIntegrityError(fmt.Errorf("verifying release signature: %w", err))
+		return "", "", target, stage, newIntegrityError(fmt.Errorf("verifying release signature: %w", err))
 	}
+	stage = updateStageVerifyChecksum
 	if err := verifyUpdateChecksum(archivePath, checksumPath, assetName); err != nil {
-		return "", "", "", newIntegrityError(fmt.Errorf("verifying archive: %w", err))
+		return "", "", target, stage, newIntegrityError(fmt.Errorf("verifying archive: %w", err))
 	}
 
+	// Replace stage: extract + atomic swap. Local failures here (extract, file
+	// write, rename, permission, disk) are NOT network failures — wrap them so
+	// the caller emits E_IO / E_FORBIDDEN. The swap is atomic, so on failure the
+	// installed binary is untouched (binary_replaced=false).
+	stage = updateStageReplace
 	binPath, err := extractUpdateArchive(archivePath, assetName, tmpDir)
 	if err != nil {
-		return "", "", "", fmt.Errorf("extracting archive: %w", err)
+		return "", "", target, stage, newReplaceError(fmt.Errorf("extracting archive: %w", err))
 	}
 	applied, err := updateBinaryApply(binPath, exe)
 	if err != nil {
-		return "", "", "", fmt.Errorf("installing update: %w", err)
+		return "", "", target, stage, newReplaceError(fmt.Errorf("installing update: %w", err))
 	}
-	return applied.Status, signatureStatus, applied.Path, nil
+	return applied.Status, signatureStatus, target, stage, nil
 }
+
+// Update stage names, shared between the binary update flow and the command
+// handler so the failure envelope's `stage` cannot drift.
+const (
+	updateStageDiscover        = "discover"
+	updateStageDownload        = "download"
+	updateStageVerifySignature = "verify_signature"
+	updateStageVerifyChecksum  = "verify_checksum"
+	updateStageReplace         = "replace"
+	updateStageSkillSync       = "skill_sync"
+)
 
 // verifyUpdateChecksumSignature enforces a mandatory, in-process Sigstore
 // signature check on checksums.txt. There is no skip path.

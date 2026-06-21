@@ -44,6 +44,12 @@ npm install -g @fateforge/wechat-mp-cli
 npx skills add fatecannotbealtered/wechat-mp-cli -y -g
 ```
 
+Updating: `wechat-mp-cli update` is a single command — it resolves the latest
+release (or `--target-version`), verifies the Sigstore signature and checksum
+in-process, replaces the binary, and syncs the Skill, all in one call. It takes
+**no confirm token**. `--check` is a read-only probe and `--dry-run` a read-only
+preview (no token); `update` is idempotent, so an agent may call it freely.
+
 Local development:
 
 ```bash
