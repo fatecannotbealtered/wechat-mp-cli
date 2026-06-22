@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"strings"
+	"time"
 
+	"github.com/fatecannotbealtered/wechat-mp-cli/internal/config"
 	"github.com/fatecannotbealtered/wechat-mp-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -149,7 +151,7 @@ func runUpdateCheck(ctx context.Context, skillCommand string) error {
 	if cmp, ok := compareVersions(version, rel.TagName); ok {
 		available = cmp < 0 || (strings.TrimSpace(updateTargetVersion) != "" && target != normalizeVersion(version))
 	}
-	return printData(map[string]any{
+	data := map[string]any{
 		"current_version":    version,
 		"latest_version":     rel.TagName,
 		"target_version":     target,
@@ -158,8 +160,37 @@ func runUpdateCheck(ctx context.Context, skillCommand string) error {
 		"install_method":     "github-binary",
 		"signature_status":   "not_checked",
 		"skill_sync_command": skillCommand,
-	})
+	}
+	// Refresh the local notice cache so future commands can piggyback it onto
+	// meta.notices. The severity is graded here (at check time) and stored, so
+	// the cached read carries the right level.
+	refreshUpdateNoticeCache(rel.TagName, rel.HTMLURL)
+	if notice := updateNoticesFromRelease(version, rel.TagName, rel.HTMLURL,
+		nowRFC3339(), updateRecommendedCommand(), "github-binary"); notice != nil {
+		data["notices"] = []any{notice}
+	}
+	return printData(data)
 }
+
+// refreshUpdateNoticeCache rebuilds the local update-notice cache from the
+// resolved latest release: it stores the graded notice when an update is
+// available and clears the cache otherwise, so an already-current tool never
+// leaves a stale notice behind. Cache write failures are non-fatal — a check
+// that cannot persist the notice still returns its result.
+func refreshUpdateNoticeCache(latestTag, releaseURL string) {
+	notice := updateNoticesFromRelease(version, latestTag, releaseURL,
+		nowRFC3339(), updateRecommendedCommand(), "github-binary")
+	if notice == nil {
+		_ = config.ClearCachedUpdateNotice()
+		return
+	}
+	_ = config.SaveCachedUpdateNotice(notice)
+}
+
+// updateRecommendedCommand is the single command an agent runs to self-update.
+func updateRecommendedCommand() string { return "wechat-mp-cli update" }
+
+func nowRFC3339() string { return updateBinaryNow().UTC().Format(time.RFC3339) }
 
 // reportUpdateFailure builds the staged failure envelope. Everything before the
 // binary swap leaves the installed binary untouched, so the post-state is always

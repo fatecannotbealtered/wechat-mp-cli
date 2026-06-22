@@ -31,6 +31,12 @@ var (
 	Compact    bool
 	Quiet      bool
 	DurationMS = func() int64 { return 0 }
+	// UpdateNoticesProvider is a func-pointer hook set from package cmd (init).
+	// It returns the cached update notice(s) to piggyback on meta.notices,
+	// read-only from the local cache with zero network I/O. It lives here as a
+	// hook to break the output -> cmd import cycle (same pattern as DurationMS).
+	// nil means "no provider wired" and yields no meta.notices.
+	UpdateNoticesProvider func() []any
 )
 
 type Envelope struct {
@@ -51,6 +57,10 @@ type ErrorEnvelope struct {
 type Meta struct {
 	DurationMS int64  `json:"duration_ms"`
 	Timestamp  string `json:"timestamp"`
+	// Notices carries the cached update notice (CLI-SPEC §3 / §14), read-only
+	// from the local cache. omitempty: present only when the cache currently
+	// holds an available-update notice; absent otherwise.
+	Notices []any `json:"notices,omitempty"`
 }
 
 func PrintJSON(data any) {
@@ -88,10 +98,16 @@ func Error(format string, args ...any) {
 }
 
 func meta() Meta {
-	return Meta{
+	m := Meta{
 		DurationMS: DurationMS(),
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
+	if UpdateNoticesProvider != nil {
+		if notices := UpdateNoticesProvider(); len(notices) > 0 {
+			m.Notices = notices
+		}
+	}
+	return m
 }
 
 func printEnvelope(env Envelope) {

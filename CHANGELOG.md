@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-06-22
+
+### Added
+
+- The update-available notice now also rides along on **every command's `meta.notices`** (CLI-SPEC §3/§14), read **only from the local cache** with zero network I/O. The cache is refreshed by the active-check commands (`update --check`, and a best-effort short-timeout check in `doctor`); business commands surface the cached notice without phoning home. `meta.notices` is omitted when the cache has nothing to report (or its entry is past TTL).
+- Update-notice **severity grading**: severity is computed at check time from the embedded CHANGELOG delta between the running version and the latest and stored in the cache. It is `warning` when the delta contains a `security` entry OR the latest crosses a major version, otherwise `info` (`critical` is reserved and not emitted). The graded notice appears both in the active-check command `data.notices` and, read-only from cache, in any command's `meta.notices`.
+
 ## [1.0.6] - 2026-06-21
 
 ### Changed

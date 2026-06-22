@@ -1,10 +1,10 @@
 ---
 name: wechat-mp-cli
-version: "1.0.6"
+version: "1.0.7"
 description: "Use wechat-mp-cli when the user needs to configure, draft, upload assets for, or publish WeChat Official Account content through a stable AI-native CLI contract."
 license: MIT
 user-invocable: true
-metadata: {"requires":{"bins":["wechat-mp-cli"],"min_version":"1.0.6"}}
+metadata: {"requires":{"bins":["wechat-mp-cli"],"min_version":"1.0.7"}}
 ---
 
 # wechat-mp-cli
@@ -156,6 +156,7 @@ wechat-mp-cli update --dry-run --compact  # optional read-only preview, issues N
 
 - It is idempotent: already-latest returns `ok` with a no-op result.
 - After success, run `wechat-mp-cli changelog --since <previous_version>` before relying on new behavior.
+- The update-available notice now also rides along on **any** command's `meta.notices` (read-only from the local cache — no network call; the cache is refreshed only by `update --check` / `doctor`). When `meta.notices` carries an `update_available` entry, run `update`. It is severity-graded: `warning` when the changelog delta since your version has a `security` entry or crosses a major version, otherwise `info`.
 - If the binary updates but Skill sync fails, the result is **partial success** (`ok:false`, `data`/`details.binary_replaced:true`): you are already on the new binary — run the returned `skill_sync_command`, then `changelog`. Do not treat this as a failed update.
 - On any `update` failure, read `details.stage` + `current_version` + `binary_replaced` to know the post-state. `E_INTEGRITY` is non-retryable; network/timeout failures before the swap are retryable (re-run `update`).
 

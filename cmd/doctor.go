@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"time"
@@ -51,6 +52,13 @@ var doctorCmd = readCommand(&cobra.Command{
 				"message": "Add an account with setup account add, or set WECHAT_MP_CLI_APP_ID and WECHAT_MP_CLI_APP_SECRET.",
 			})
 		}
+		// doctor MAY actively check for an update with a short timeout (CLI-SPEC
+		// §14); a network failure must not make doctor fail by itself. The graded
+		// notice is refreshed into the local cache and surfaced in data.notices
+		// as the fresh/active view.
+		if notice := doctorUpdateNotice(cmd.Context()); notice != nil {
+			notices = append(notices, notice)
+		}
 		return printData(map[string]any{
 			"ok":          !blocking,
 			"config_path": config.FilePath(),
@@ -62,6 +70,23 @@ var doctorCmd = readCommand(&cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(doctorCmd)
+}
+
+// doctorUpdateNotice does a best-effort, short-timeout active update check. It
+// refreshes the local notice cache and returns the graded notice when an update
+// is available; any network/timeout failure (or already-current) yields nil so
+// doctor never fails on it. The cache write lets later commands piggyback the
+// same notice onto meta.notices.
+func doctorUpdateNotice(ctx context.Context) map[string]any {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	rel, err := fetchBinaryRelease(ctx, "")
+	if err != nil {
+		return nil
+	}
+	refreshUpdateNoticeCache(rel.TagName, rel.HTMLURL)
+	return updateNoticesFromRelease(version, rel.TagName, rel.HTMLURL,
+		nowRFC3339(), updateRecommendedCommand(), "github-binary")
 }
 
 func checkConfigDir() doctorCheck {
