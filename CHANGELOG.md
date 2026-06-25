@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-06-25
+
 ### Added
 
 - **Contract single-source**: vendors `ai-native-cli-spec@v1.4` into `.agent/` (specs, `contract/contract.json`, codegen scripts). `internal/contract/contract_gen.go` is now generated from `contract.json` and is the binding source for every error-code → exit-code → retryability mapping. `scripts/check-spec.js` is the CI-red guard against drift.
