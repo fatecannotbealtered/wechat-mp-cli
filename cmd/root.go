@@ -180,12 +180,17 @@ func printData(data any) error {
 	return nil
 }
 
-func fail(exitCode int, code, message string, retryable bool) error {
-	return failWithDetails(exitCode, code, message, nil, retryable)
+// fail / failWithDetails keep a leading exit-code parameter for call-site
+// compatibility, but it is IGNORED: the process exit is DERIVED from the error
+// code via ExitCodeForErrorCode so the parallel-exit-constant drift class is
+// eliminated — the exit is always consistent with the contract regardless of
+// what a caller passes.
+func fail(_ int, code, message string, retryable bool) error {
+	return failWithDetails(0, code, message, nil, retryable)
 }
 
-func failWithDetails(exitCode int, code, message string, details any, retryable bool) error {
-	setExitCode(exitCode)
+func failWithDetails(_ int, code, message string, details any, retryable bool) error {
+	setExitCode(output.ExitCodeForErrorCode(code))
 	if jsonMode {
 		output.PrintErrorJSON(code, message, details, retryable)
 	} else {
@@ -206,10 +211,10 @@ func handleError(err error) error {
 	}
 	var apiErr *mpapi.APIError
 	if errors.As(err, &apiErr) {
-		code, exit, retryable, details := classifyAPIError(apiErr)
-		return failWithDetails(exit, code, apiErr.Error(), details, retryable)
+		code, _, retryable, details := classifyAPIError(apiErr)
+		return failWithDetails(0, code, apiErr.Error(), details, retryable)
 	}
-	return fail(ExitError, output.ErrNetwork, err.Error(), true)
+	return fail(0, output.ErrNetwork, err.Error(), true)
 }
 
 // classifyCallError maps any client error (a WeChat APIError or a transport

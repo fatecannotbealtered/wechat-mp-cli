@@ -113,7 +113,7 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		if ctx.Err() != nil {
 			return reportUpdateInterrupted(updateStageSkillSync, resolved, true, skillCommand)
 		}
-		return failWithDetails(ExitError, output.ErrNetwork,
+		return failWithDetails(0, output.ErrNetwork,
 			"binary updated to "+resolved+" but skill sync failed: "+err.Error(),
 			map[string]any{
 				"stage":              updateStageSkillSync,
@@ -227,17 +227,17 @@ func reportUpdateFailure(ctx context.Context, stage string, err error, skillComm
 	// Integrity failure: fail closed, non-retryable. A forged or corrupt release
 	// is not a transient blip to loop on.
 	if isIntegrityError(err) {
-		return failWithDetails(ExitError, output.ErrIntegrity, err.Error(), details, false)
+		return failWithDetails(0, output.ErrIntegrity, err.Error(), details, false)
 	}
 
 	// Replace-stage local failure: permission -> E_FORBIDDEN (exit 4); other
 	// io/disk -> E_IO (exit 1). Never the retryable network class.
 	if re, ok := asReplaceError(err); ok {
 		if re.permission {
-			return failWithDetails(ExitAuth, output.ErrForbidden,
+			return failWithDetails(0, output.ErrForbidden,
 				"update failed during replace: "+err.Error(), details, false)
 		}
-		return failWithDetails(ExitError, output.ErrIO,
+		return failWithDetails(0, output.ErrIO,
 			"update failed during replace: "+err.Error(), details, false)
 	}
 
@@ -247,8 +247,8 @@ func reportUpdateFailure(ctx context.Context, stage string, err error, skillComm
 	// E_RATE_LIMITED, 5xx -> E_SERVER, timeout -> E_TIMEOUT; transport failures
 	// stay E_NETWORK. All but 404 are retryable, and re-running `update` is
 	// idempotent.
-	code, exit, retryable := classifyUpdateNetworkError(err)
-	return failWithDetails(exit, code, "update failed: "+err.Error(), details, retryable)
+	code, _, retryable := classifyUpdateNetworkError(err)
+	return failWithDetails(0, code, "update failed: "+err.Error(), details, retryable)
 }
 
 // reportUpdateInterrupted emits the terminal JSON envelope after a SIGINT/SIGTERM
@@ -272,45 +272,47 @@ func reportUpdateInterrupted(stage, currentVersion string, binaryReplaced bool, 
 		details["skill_sync_status"] = "skipped"
 		msg = "update cancelled, no change, still on " + currentVersion + " — re-run \"wechat-mp-cli update\", it is idempotent"
 	}
-	return failWithDetails(ExitInterrupted, output.ErrInterrupted, msg, details, true)
+	return failWithDetails(0, output.ErrInterrupted, msg, details, true)
 }
 
 // runNPMUpdate drives npm to install the target version on behalf of the user.
 // --dry-run previews the command and exits 0; a live run executes it via
 // updateRunPackageManager (testable seam), then syncs the Skill.
 func runNPMUpdate(ctx context.Context, target, skillCommand string) error {
-	npmCmd := updateManagerCommand("npm")
-	if target != "" {
-		npmCmd = "npm install -g @fateforge/wechat-mp-cli@" + normalizeVersion(target)
+	// When no specific version is requested, use "latest" so the install arg is
+	// always well-formed ("@fateforge/wechat-mp-cli@latest") and the displayed
+	// command is unambiguous. An empty version tag makes npm reject the install.
+	resolvedTarget := target
+	if resolvedTarget == "" {
+		resolvedTarget = "latest"
 	}
+	npmCmd := "npm install -g @fateforge/wechat-mp-cli@" + normalizeVersion(resolvedTarget)
 
 	if dryRun {
 		return printData(map[string]any{
 			"action":             "update wechat-mp-cli",
 			"current_version":    version,
-			"target_version":     target,
+			"target_version":     resolvedTarget,
 			"install_method":     "npm",
 			"command":            npmCmd,
 			"skill_sync_command": skillCommand,
 		})
 	}
 
-	resolvedTarget := target
 	if err := updateRunPackageManager(ctx, "npm", resolvedTarget); err != nil {
-		npmCmdForErr := npmCmd
-		return failWithDetails(ExitError, output.ErrIO,
+		return failWithDetails(0, output.ErrIO,
 			"npm update failed: "+err.Error(),
 			map[string]any{
 				"stage":           "replace",
 				"current_version": version,
 				"binary_replaced": false,
 				"install_method":  "npm",
-				"command":         npmCmdForErr,
+				"command":         npmCmd,
 			}, false)
 	}
 
 	if err := updateSkillSync(ctx, updateSkillRepo); err != nil {
-		return failWithDetails(ExitError, output.ErrNetwork,
+		return failWithDetails(0, output.ErrNetwork,
 			"npm updated wechat-mp-cli but skill sync failed: "+err.Error(),
 			map[string]any{
 				"stage":              updateStageSkillSync,
@@ -325,6 +327,7 @@ func runNPMUpdate(ctx context.Context, target, skillCommand string) error {
 		"status":             "updated",
 		"previous_version":   version,
 		"current_version":    resolvedTarget,
+		"target_version":     resolvedTarget,
 		"binary_replaced":    true,
 		"signature_status":   "not_checked",
 		"signature_verified": false,

@@ -645,6 +645,9 @@ func truncate(s string, n int) string {
 // version string cannot be reinterpreted by a shell.
 func runPackageManagerInstall(ctx context.Context, method, targetVersion string) error {
 	ver := normalizeVersion(targetVersion)
+	if ver == "" {
+		ver = "latest"
+	}
 	switch method {
 	case "npm":
 		pkg := "@fateforge/wechat-mp-cli@" + ver

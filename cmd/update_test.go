@@ -217,8 +217,11 @@ func TestUpdate_SkillSyncFailureIsPartialSuccess(t *testing.T) {
 	if _, ok := details["skill_sync_command"]; !ok {
 		t.Fatalf("partial success must carry skill_sync_command: %v", details)
 	}
-	if exit != ExitError {
-		t.Fatalf("skill-sync partial exit = %d, want 1", exit)
+	// Exit derives from the error code: the skill-sync partial-success path uses
+	// E_NETWORK (retryable), so the exit is ExitRetryable (7), consistent with
+	// retryable:true — not the old hardcoded ExitError (1).
+	if exit != ExitRetryable {
+		t.Fatalf("skill-sync partial exit = %d, want %d (E_NETWORK, retryable)", exit, ExitRetryable)
 	}
 }
 
