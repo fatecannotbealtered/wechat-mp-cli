@@ -36,6 +36,49 @@ func TestContractConformance_ErrorCodes(t *testing.T) {
 	}
 }
 
+// expectedCodeSpec is an INDEPENDENT, hand-written expected {exit, retryable}
+// for every emitted code. It does NOT delegate to contract.Codes, so it catches
+// a wrong contract.json that the delegating assertion above cannot detect.
+// Canonical source: CLI-SPEC §6 / contract.json error_codes.core.
+var expectedCodeSpec = map[string]struct {
+	exit      int
+	retryable bool
+}{
+	ErrUsage:                {2, false},
+	ErrValidation:           {2, false},
+	ErrNotFound:             {3, false},
+	ErrAuth:                 {4, false},
+	ErrForbidden:            {4, false},
+	ErrConfig:               {4, false},
+	ErrConfirmationRequired: {5, false},
+	ErrConflict:             {6, false},
+	ErrNetwork:              {7, true},
+	ErrRateLimited:          {7, true},
+	ErrServer:               {7, true},
+	ErrTimeout:              {8, true},
+	ErrIntegrity:            {1, false},
+	ErrIO:                   {1, false},
+	ErrInterrupted:          {130, true},
+}
+
+// TestContractConformance_IndependentCodeTable cross-checks exit/retryable against
+// a hand-written table (not contract.Codes), so the assertion is not tautological.
+func TestContractConformance_IndependentCodeTable(t *testing.T) {
+	for code, want := range expectedCodeSpec {
+		if got := ExitCodeForErrorCode(code); got != want.exit {
+			t.Errorf("exit mismatch for %q: got %d want %d", code, got, want.exit)
+		}
+		if got := RetryableForErrorCode(code); got != want.retryable {
+			t.Errorf("retryable mismatch for %q: got %v want %v", code, got, want.retryable)
+		}
+	}
+	for _, c := range allErrorCodes {
+		if _, ok := expectedCodeSpec[c]; !ok {
+			t.Errorf("error code %q is in allErrorCodes but missing from expectedCodeSpec", c)
+		}
+	}
+}
+
 func TestContractConformance_SchemaVersion(t *testing.T) {
 	if SchemaVersion != contract.SchemaVersion {
 		t.Fatalf("schema_version drift: output=%q contract=%q", SchemaVersion, contract.SchemaVersion)
@@ -93,6 +136,12 @@ func checkEnvelopeKeys(t *testing.T, label string, env Envelope, canonical []str
 			t.Errorf("%s envelope missing required key %q", label, req)
 		}
 	}
+	// success envelope must carry "data" when a non-empty payload is supplied.
+	if label == "success" {
+		if _, ok := top["data"]; !ok {
+			t.Errorf("success envelope missing \"data\" key (success_keys require it)")
+		}
+	}
 	// Check meta keys against the canonical allowed set.
 	var metaMap map[string]json.RawMessage
 	if raw, ok := top["meta"]; ok {
@@ -102,6 +151,12 @@ func checkEnvelopeKeys(t *testing.T, label string, env Envelope, canonical []str
 	for k := range metaMap {
 		if !containsStr(allowed, k) {
 			t.Errorf("meta has unexpected key %q (canonical: %v)", k, allowed)
+		}
+	}
+	// every MetaRequiredKey must be present.
+	for _, req := range contract.MetaRequiredKeys {
+		if _, ok := metaMap[req]; !ok {
+			t.Errorf("%s envelope meta missing required key %q", label, req)
 		}
 	}
 }
