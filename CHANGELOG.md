@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Contract single-source**: vendors `ai-native-cli-spec@v1.4` into `.agent/` (specs, `contract/contract.json`, codegen scripts). `internal/contract/contract_gen.go` is now generated from `contract.json` and is the binding source for every error-code → exit-code → retryability mapping. `scripts/check-spec.js` is the CI-red guard against drift.
+- `ExitCodeForErrorCode(code)` and `RetryableForErrorCode(code)` functions in `internal/output`, both delegating to `internal/contract` so the output layer cannot drift from the fleet contract (CLI-SPEC §6).
+- **Contract conformance test** (`internal/output/contract_conformance_test.go`): asserts every emitted error code is in `contract.Codes` with exact exit+retryable, `SchemaVersion` matches, and envelope top-level/meta keys are within the canonical sets — including catching any stray `meta.timestamp`.
+- **npm-drive update**: `update` now detects npm installs (binary under `node_modules`) and, for those installs, **executes `npm install -g @fateforge/wechat-mp-cli@<ver>`** on the user's behalf via the testable seam `updateRunPackageManager` instead of self-replacing the npm-managed binary. `--dry-run` previews the command without executing. A PM failure emits `E_IO` (exit 1, `binary_replaced:false`). Standalone GitHub binaries keep the Sigstore self-update path.
+
+### Changed
+
+- `meta.timestamp` removed from the JSON envelope: the canonical contract (`meta_required_keys: [duration_ms]`, `meta_optional_keys: [notices]`) does not include `timestamp`, so it was a conformance violation caught by the new conformance test.
+- `.agent/` specs synced from `ai-native-cli-spec@v1.4` (single-source replaces hand-maintained copies).
+- `SchemaVersion` in `internal/output` now references `contract.SchemaVersion` (was a hard-coded string literal).
+- CI: `Verify spec/contract sync` step added to `npm-audit` job, immediately after `Verify version sync`.
+
 ## [1.0.8] - 2026-06-25
 
 ### Changed

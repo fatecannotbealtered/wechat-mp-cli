@@ -647,6 +647,120 @@ func newUpdateReleaseServer(t *testing.T) *updateReleaseServer {
 	return rs
 }
 
+// TestUpdate_NPMDrive: when the binary runs from node_modules (npm install),
+// a bare `update` EXECUTES npm install -g (via the seam), then syncs the Skill,
+// and reports status=updated with install_method=npm and binary_replaced=true.
+// The seam ensures no real npm is called during testing.
+func TestUpdate_NPMDrive(t *testing.T) {
+	origExe := updateBinaryExecutable
+	origPM := updateRunPackageManager
+	origSync := updateSkillSync
+	updateBinaryExecutable = func() (string, error) {
+		return "/home/u/node_modules/@fateforge/wechat-mp-cli-linux-x64/bin/wechat-mp-cli", nil
+	}
+	pmCalled := false
+	updateRunPackageManager = func(_ context.Context, method, _ string) error {
+		pmCalled = true
+		if method != "npm" {
+			t.Errorf("package manager method = %q, want npm", method)
+		}
+		return nil
+	}
+	updateSkillSync = func(_ context.Context, _ string) error { return nil }
+	defer func() {
+		updateBinaryExecutable = origExe
+		updateRunPackageManager = origPM
+		updateSkillSync = origSync
+	}()
+
+	env, exit := runUpdateCapture(t, "update")
+	if ok, _ := env["ok"].(bool); !ok {
+		t.Fatalf("npm drive should be ok:true: %v", env)
+	}
+	if exit != ExitOK {
+		t.Fatalf("npm drive exit = %d, want 0", exit)
+	}
+	if !pmCalled {
+		t.Fatalf("updateRunPackageManager was not called for npm install")
+	}
+	data := envData(t, env)
+	if data["install_method"] != "npm" {
+		t.Fatalf("install_method = %v, want npm", data["install_method"])
+	}
+	if data["status"] != "updated" {
+		t.Fatalf("status = %v, want updated", data["status"])
+	}
+	if data["skill_sync_status"] != "synced" {
+		t.Fatalf("skill_sync_status = %v, want synced", data["skill_sync_status"])
+	}
+}
+
+// TestUpdate_NPMDrive_Failure: when npm install -g fails, the envelope reports
+// E_IO (exit 1, non-retryable), binary_replaced:false, and carries the command.
+func TestUpdate_NPMDrive_Failure(t *testing.T) {
+	origExe := updateBinaryExecutable
+	origPM := updateRunPackageManager
+	updateBinaryExecutable = func() (string, error) {
+		return "/home/u/node_modules/@fateforge/wechat-mp-cli-linux-x64/bin/wechat-mp-cli", nil
+	}
+	updateRunPackageManager = func(_ context.Context, _, _ string) error {
+		return errors.New("npm ERR! EACCES permission denied")
+	}
+	defer func() {
+		updateBinaryExecutable = origExe
+		updateRunPackageManager = origPM
+	}()
+
+	env, exit := runUpdateCapture(t, "update")
+	if ok, _ := env["ok"].(bool); ok {
+		t.Fatalf("npm failure should be ok:false: %v", env)
+	}
+	e := envError(t, env)
+	if e["code"] != "E_IO" {
+		t.Fatalf("npm failure code = %v, want E_IO", e["code"])
+	}
+	if e["retryable"] != false {
+		t.Fatalf("npm failure must be non-retryable: %v", e)
+	}
+	if exit != ExitError {
+		t.Fatalf("npm failure exit = %d, want 1", exit)
+	}
+	details, _ := e["details"].(map[string]any)
+	if details["binary_replaced"] != false {
+		t.Fatalf("npm failure binary_replaced must be false: %v", details)
+	}
+}
+
+// TestUpdate_NPMDrive_DryRun: --dry-run for npm install previews the command
+// and exits 0 without executing npm.
+func TestUpdate_NPMDrive_DryRun(t *testing.T) {
+	origExe := updateBinaryExecutable
+	origPM := updateRunPackageManager
+	updateBinaryExecutable = func() (string, error) {
+		return "/home/u/node_modules/@fateforge/wechat-mp-cli-linux-x64/bin/wechat-mp-cli", nil
+	}
+	updateRunPackageManager = func(_ context.Context, _, _ string) error {
+		t.Fatalf("npm must not be executed during --dry-run")
+		return nil
+	}
+	defer func() {
+		updateBinaryExecutable = origExe
+		updateRunPackageManager = origPM
+	}()
+
+	env, exit := runUpdateCapture(t, "update", "--dry-run")
+	if ok, _ := env["ok"].(bool); !ok {
+		t.Fatalf("npm dry-run should be ok:true: %v", env)
+	}
+	if exit != ExitOK {
+		t.Fatalf("npm dry-run exit = %d, want 0", exit)
+	}
+	data := envData(t, env)
+	if !strings.Contains(toStr(data["command"]), "npm install -g @fateforge/wechat-mp-cli") {
+		t.Fatalf("npm dry-run should carry npm command: %v", data["command"])
+	}
+}
+
 func buildUpdateTarGz(t *testing.T, name string, content []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer

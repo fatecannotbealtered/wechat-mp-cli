@@ -125,14 +125,15 @@ func classifyUpdateNetworkError(err error) (code string, exit int, retryable boo
 
 // Testable seams.
 var (
-	updateBinaryHTTPClient = &http.Client{Timeout: 2 * time.Minute}
-	updateBinaryGitHubAPI  = updateGitHubAPI
-	updateBinaryPlatform   = func() (string, string) { return runtime.GOOS, runtime.GOARCH }
-	updateBinaryExecutable = os.Executable
-	updateBinaryApply      = applyUpdateBinary
-	updateBinaryNow        = time.Now
-	updateSkillSync        = runUpdateSkillSync
-	updateGetenv           = os.Getenv
+	updateBinaryHTTPClient  = &http.Client{Timeout: 2 * time.Minute}
+	updateBinaryGitHubAPI   = updateGitHubAPI
+	updateBinaryPlatform    = func() (string, string) { return runtime.GOOS, runtime.GOARCH }
+	updateBinaryExecutable  = os.Executable
+	updateBinaryApply       = applyUpdateBinary
+	updateBinaryNow         = time.Now
+	updateSkillSync         = runUpdateSkillSync
+	updateGetenv            = os.Getenv
+	updateRunPackageManager = runPackageManagerInstall
 )
 
 type updateReleaseAsset struct {
@@ -637,6 +638,29 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// runPackageManagerInstall drives npm to install the target version — the same
+// command updateManagerCommand prints. argv is built directly (no shell) so the
+// version string cannot be reinterpreted by a shell.
+func runPackageManagerInstall(ctx context.Context, method, targetVersion string) error {
+	ver := normalizeVersion(targetVersion)
+	switch method {
+	case "npm":
+		pkg := "@fateforge/wechat-mp-cli@" + ver
+		cmd := exec.CommandContext(ctx, "npm", "install", "-g", pkg)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			msg := strings.TrimSpace(string(out))
+			if msg != "" {
+				return fmt.Errorf("%w: %s", err, truncate(msg, 300))
+			}
+			return err
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported package manager: %s", method)
+	}
 }
 
 // --- version helpers ---

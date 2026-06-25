@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
+
+	"github.com/fatecannotbealtered/wechat-mp-cli/internal/contract"
 )
 
-const SchemaVersion = "1.0"
+// SchemaVersion is sourced from the canonical contract (contract/contract.json
+// via internal/contract/contract_gen.go), so the JSON schema version cannot drift
+// from the fleet contract.
+const SchemaVersion = contract.SchemaVersion
 
 const (
 	ErrUsage                = "E_USAGE"
@@ -54,13 +58,28 @@ type ErrorEnvelope struct {
 	Retryable bool   `json:"retryable"`
 }
 
+// Meta carries the envelope metadata. Canonical keys are duration_ms and
+// notices (CLI-SPEC §3 / contract.json); no other keys may appear here.
 type Meta struct {
-	DurationMS int64  `json:"duration_ms"`
-	Timestamp  string `json:"timestamp"`
+	DurationMS int64 `json:"duration_ms"`
 	// Notices carries the cached update notice (CLI-SPEC §3 / §14), read-only
 	// from the local cache. omitempty: present only when the cache currently
 	// holds an available-update notice; absent otherwise.
 	Notices []any `json:"notices,omitempty"`
+}
+
+// ExitCodeForErrorCode maps a semantic error code to its process exit code.
+// The mapping is sourced from the canonical contract (internal/contract), so
+// it cannot drift from the fleet's E_* -> exit table (CLI-SPEC §6).
+func ExitCodeForErrorCode(code string) int {
+	return contract.ExitFor(code)
+}
+
+// RetryableForErrorCode reports whether an agent may retry an error code.
+// Sourced from the canonical contract (internal/contract) so it cannot drift
+// from the fleet's retryability table.
+func RetryableForErrorCode(code string) bool {
+	return contract.Retryable(code)
 }
 
 func PrintJSON(data any) {
@@ -100,7 +119,6 @@ func Error(format string, args ...any) {
 func meta() Meta {
 	m := Meta{
 		DurationMS: DurationMS(),
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
 	if UpdateNoticesProvider != nil {
 		if notices := UpdateNoticesProvider(); len(notices) > 0 {

@@ -48,6 +48,18 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	}
 
 	target := normalizeVersion(updateTargetVersion)
+	ctx := cmd.Context()
+
+	// Package-manager installs: the binary is OWNED by npm, so instead of
+	// mutating it in place, DRIVE the package manager — run npm install -g on
+	// the user's behalf, then sync the Skill. Integrity is npm's own;
+	// signature_status stays "not_checked". The new version takes effect on
+	// the next invocation (this process is still the old image).
+	// NOTE: runNPMUpdate handles --dry-run internally (preview only, no exec).
+	installMethod := detectInstallMethod()
+	if installMethod == "npm" {
+		return runNPMUpdate(ctx, target, skillCommand)
+	}
 
 	// --dry-run is a read-only preview of the plan. It is no longer a gate: it
 	// issues NO confirm_token and NO expires_at, and is never required before a
@@ -68,7 +80,6 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	// Single command, no confirm token: resolve -> verify integrity -> replace
 	// binary -> sync Skill, all in one call. Self-update is exempt from the §7
 	// write gate; the safety guarantee is the in-process signature verification.
-	ctx := cmd.Context()
 
 	// Idempotent: when already on the resolved (latest or requested) version,
 	// return ok with a no-op result so an agent may call update freely.
@@ -262,4 +273,65 @@ func reportUpdateInterrupted(stage, currentVersion string, binaryReplaced bool, 
 		msg = "update cancelled, no change, still on " + currentVersion + " — re-run \"wechat-mp-cli update\", it is idempotent"
 	}
 	return failWithDetails(ExitInterrupted, output.ErrInterrupted, msg, details, true)
+}
+
+// runNPMUpdate drives npm to install the target version on behalf of the user.
+// --dry-run previews the command and exits 0; a live run executes it via
+// updateRunPackageManager (testable seam), then syncs the Skill.
+func runNPMUpdate(ctx context.Context, target, skillCommand string) error {
+	npmCmd := updateManagerCommand("npm")
+	if target != "" {
+		npmCmd = "npm install -g @fateforge/wechat-mp-cli@" + normalizeVersion(target)
+	}
+
+	if dryRun {
+		return printData(map[string]any{
+			"action":             "update wechat-mp-cli",
+			"current_version":    version,
+			"target_version":     target,
+			"install_method":     "npm",
+			"command":            npmCmd,
+			"skill_sync_command": skillCommand,
+		})
+	}
+
+	resolvedTarget := target
+	if err := updateRunPackageManager(ctx, "npm", resolvedTarget); err != nil {
+		npmCmdForErr := npmCmd
+		return failWithDetails(ExitError, output.ErrIO,
+			"npm update failed: "+err.Error(),
+			map[string]any{
+				"stage":           "replace",
+				"current_version": version,
+				"binary_replaced": false,
+				"install_method":  "npm",
+				"command":         npmCmdForErr,
+			}, false)
+	}
+
+	if err := updateSkillSync(ctx, updateSkillRepo); err != nil {
+		return failWithDetails(ExitError, output.ErrNetwork,
+			"npm updated wechat-mp-cli but skill sync failed: "+err.Error(),
+			map[string]any{
+				"stage":              updateStageSkillSync,
+				"current_version":    resolvedTarget,
+				"binary_replaced":    true,
+				"skill_sync_status":  "failed",
+				"skill_sync_command": skillCommand,
+			}, true)
+	}
+
+	return printData(map[string]any{
+		"status":             "updated",
+		"previous_version":   version,
+		"current_version":    resolvedTarget,
+		"binary_replaced":    true,
+		"signature_status":   "not_checked",
+		"signature_verified": false,
+		"install_method":     "npm",
+		"command":            npmCmd,
+		"skill_sync_status":  "synced",
+		"skill_sync_command": skillCommand,
+		"next_step":          "run \"wechat-mp-cli changelog --since " + version + "\" to see what changed",
+	})
 }
