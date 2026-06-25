@@ -86,7 +86,7 @@ func doctorUpdateNotice(ctx context.Context) map[string]any {
 	}
 	refreshUpdateNoticeCache(rel.TagName, rel.HTMLURL)
 	return updateNoticesFromRelease(version, rel.TagName, rel.HTMLURL,
-		nowRFC3339(), updateRecommendedCommand(), "github-binary")
+		nowRFC3339(), updateRecommendedCommand(), detectInstallMethod())
 }
 
 func checkConfigDir() doctorCheck {

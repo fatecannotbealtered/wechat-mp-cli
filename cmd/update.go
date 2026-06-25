@@ -90,7 +90,7 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	status, sigStatus, resolved, stage, err := performBinaryUpdate(ctx, target)
+	_, sigStatus, resolved, stage, err := performBinaryUpdate(ctx, target)
 	if err != nil {
 		return reportUpdateFailure(ctx, stage, err, skillCommand)
 	}
@@ -114,12 +114,8 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 			}, true)
 	}
 
-	resultStatus := "updated"
-	if status == "scheduled" {
-		resultStatus = "scheduled"
-	}
 	return printData(map[string]any{
-		"status":             resultStatus,
+		"status":             "updated",
 		"previous_version":   version,
 		"current_version":    resolved,
 		"binary_replaced":    true,
@@ -132,12 +128,13 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 }
 
 func runUpdateCheck(ctx context.Context, skillCommand string) error {
+	installMethod := detectInstallMethod()
 	rel, err := fetchBinaryRelease(ctx, updateTargetVersion)
 	if err != nil {
 		return printData(map[string]any{
 			"current_version":    version,
 			"update_available":   false,
-			"install_method":     "github-binary",
+			"install_method":     installMethod,
 			"signature_status":   "not_checked",
 			"skill_sync_command": skillCommand,
 			"error":              "could not reach GitHub releases: " + err.Error(),
@@ -157,16 +154,21 @@ func runUpdateCheck(ctx context.Context, skillCommand string) error {
 		"target_version":     target,
 		"update_available":   available,
 		"release_url":        rel.HTMLURL,
-		"install_method":     "github-binary",
+		"install_method":     installMethod,
 		"signature_status":   "not_checked",
 		"skill_sync_command": skillCommand,
+	}
+	// When the binary is owned by a package manager, point the agent at the
+	// channel that owns it instead of the in-place self-updater.
+	if mgr := updateManagerCommand(installMethod); mgr != "" {
+		data["manager_command"] = mgr
 	}
 	// Refresh the local notice cache so future commands can piggyback it onto
 	// meta.notices. The severity is graded here (at check time) and stored, so
 	// the cached read carries the right level.
 	refreshUpdateNoticeCache(rel.TagName, rel.HTMLURL)
 	if notice := updateNoticesFromRelease(version, rel.TagName, rel.HTMLURL,
-		nowRFC3339(), updateRecommendedCommand(), "github-binary"); notice != nil {
+		nowRFC3339(), updateRecommendedCommand(), installMethod); notice != nil {
 		data["notices"] = []any{notice}
 	}
 	return printData(data)
@@ -179,7 +181,7 @@ func runUpdateCheck(ctx context.Context, skillCommand string) error {
 // that cannot persist the notice still returns its result.
 func refreshUpdateNoticeCache(latestTag, releaseURL string) {
 	notice := updateNoticesFromRelease(version, latestTag, releaseURL,
-		nowRFC3339(), updateRecommendedCommand(), "github-binary")
+		nowRFC3339(), updateRecommendedCommand(), detectInstallMethod())
 	if notice == nil {
 		_ = config.ClearCachedUpdateNotice()
 		return
@@ -228,9 +230,14 @@ func reportUpdateFailure(ctx context.Context, stage string, err error, skillComm
 			"update failed during replace: "+err.Error(), details, false)
 	}
 
-	// discover / download: network / timeout / rate-limit, retryable. Re-running
-	// `update` is idempotent.
-	return failWithDetails(ExitRetryable, output.ErrNetwork, "update failed: "+err.Error(), details, true)
+	// discover / download: classify the HTTP failure by status rather than
+	// collapsing every non-2xx into E_NETWORK. 404 -> E_NOT_FOUND (a requested
+	// --target-version that does not exist is not retryable), 429 ->
+	// E_RATE_LIMITED, 5xx -> E_SERVER, timeout -> E_TIMEOUT; transport failures
+	// stay E_NETWORK. All but 404 are retryable, and re-running `update` is
+	// idempotent.
+	code, exit, retryable := classifyUpdateNetworkError(err)
+	return failWithDetails(exit, code, "update failed: "+err.Error(), details, retryable)
 }
 
 // reportUpdateInterrupted emits the terminal JSON envelope after a SIGINT/SIGTERM

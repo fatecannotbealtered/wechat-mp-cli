@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-06-25
+
+### Changed
+
+- Binary self-update on **Windows** now uses the same in-process atomic **rename trick** as Unix (write `.<name>.new` → move the in-use binary aside to `.<name>.old` → rename `.new` into place → roll back from `.old` on failure). The old `.cmd` replace-on-restart helper script is gone: `update` completes the swap in one call and reports `status: "updated"` / `binary_replaced: true` on every platform — no `scheduled` state, no restart required.
+
+### Fixed
+
+- `update` failure classification no longer collapses every fault into one class (CLI-SPEC §6/§14). A **discover/download** HTTP failure is now mapped by upstream status — `404` → `E_NOT_FOUND` (exit 3, non-retryable; e.g. an unknown `--target-version`), `429` → `E_RATE_LIMITED`, `5xx` → `E_SERVER`, timeouts → `E_TIMEOUT` (exit 8) — instead of always reporting `E_NETWORK`. Failing to **download the signature bundle** is now a retryable network failure at the `download` stage rather than a non-retryable `E_INTEGRITY` verdict; only an actual signature/identity/checksum verification failure (or a release that ships no bundle at all) stays `E_INTEGRITY` (exit 1, non-retryable). A SIGINT during the verify stage still unwinds to the terminal `E_INTERRUPTED` (exit 130) envelope.
+- `update --check` (and the `doctor` / cached update notices) now report the **real `install_method`** instead of a hardcoded `github-binary`: a binary running from an npm `node_modules` tree reports `npm` and carries a `manager_command` (`npm install -g @fateforge/wechat-mp-cli@latest`), and an explicit `WECHAT_MP_CLI_INSTALL_METHOD` override wins. This stops an agent from being told to self-update a binary its package manager owns.
+
 ## [1.0.7] - 2026-06-22
 
 ### Added

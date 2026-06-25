@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/fatecannotbealtered/wechat-mp-cli/internal/output"
 )
 
 // This file gives wechat-mp-cli a self-contained binary self-update: download
@@ -73,6 +76,53 @@ func asReplaceError(err error) (*replaceError, bool) {
 	return nil, false
 }
 
+// httpStatusError carries the upstream HTTP status from a GitHub releases call so
+// a discover/download failure can be mapped onto the §6 status->code taxonomy
+// (404 != 5xx != 429) instead of collapsing every non-2xx into a single network
+// class. Transport-level failures (DNS/reset/refused) have no status and stay
+// E_NETWORK.
+type httpStatusError struct {
+	statusCode int
+	url        string
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("GET %s returned %d", e.url, e.statusCode)
+}
+
+// classifyUpdateNetworkError maps a discover/download error onto the
+// {code, exit, retryable} taxonomy. This is the SINGLE place the update flow
+// turns an HTTP status into an error code so the status->code->exit contract
+// cannot drift. A timeout (408 or a cancelled-by-deadline transport error) is
+// E_TIMEOUT (exit 8); 404 -> E_NOT_FOUND (exit 3, non-retryable); 429 ->
+// E_RATE_LIMITED (exit 7); 5xx -> E_SERVER (exit 7); everything else, including
+// transport failures with no status, stays E_NETWORK (exit 7).
+func classifyUpdateNetworkError(err error) (code string, exit int, retryable bool) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return output.ErrTimeout, ExitTimeout, true
+	}
+	// http.Client.Timeout surfaces as a net.Error with Timeout()==true rather
+	// than a wrapped context.DeadlineExceeded, so check the timeout interface too.
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return output.ErrTimeout, ExitTimeout, true
+	}
+	var statusErr *httpStatusError
+	if errors.As(err, &statusErr) {
+		switch sc := statusErr.statusCode; {
+		case sc == http.StatusNotFound:
+			return output.ErrNotFound, ExitNotFound, false
+		case sc == http.StatusRequestTimeout:
+			return output.ErrTimeout, ExitTimeout, true
+		case sc == http.StatusTooManyRequests:
+			return output.ErrRateLimited, ExitRetryable, true
+		case sc >= 500:
+			return output.ErrServer, ExitRetryable, true
+		}
+	}
+	return output.ErrNetwork, ExitRetryable, true
+}
+
 // Testable seams.
 var (
 	updateBinaryHTTPClient = &http.Client{Timeout: 2 * time.Minute}
@@ -82,6 +132,7 @@ var (
 	updateBinaryApply      = applyUpdateBinary
 	updateBinaryNow        = time.Now
 	updateSkillSync        = runUpdateSkillSync
+	updateGetenv           = os.Getenv
 )
 
 type updateReleaseAsset struct {
@@ -96,9 +147,8 @@ type updateBinaryRelease struct {
 }
 
 type updateApplyResult struct {
-	Status      string
-	Path        string
-	PendingPath string
+	Status string
+	Path   string
 }
 
 // performBinaryUpdate downloads, verifies, and installs the target release
@@ -158,6 +208,15 @@ func performBinaryUpdate(ctx context.Context, targetVersion string) (status, sig
 	stage = updateStageVerifySignature
 	signatureStatus, err = verifyUpdateChecksumSignature(ctx, checksumPath, bundleURL, tmpDir)
 	if err != nil {
+		// Split network from integrity: fetching the signature bundle is a
+		// download (transient, retryable) — only an actual signature/identity
+		// verification failure, or a missing bundle in the release, is a
+		// non-retryable integrity failure. A bundleDownloadError carries the
+		// underlying transport/status error so the caller classifies it as
+		// network/timeout/rate-limit, never E_INTEGRITY.
+		if de, ok := asBundleDownloadError(err); ok {
+			return "", "", target, updateStageDownload, de.err
+		}
 		return "", "", target, stage, newIntegrityError(fmt.Errorf("verifying release signature: %w", err))
 	}
 	stage = updateStageVerifyChecksum
@@ -192,15 +251,36 @@ const (
 	updateStageSkillSync       = "skill_sync"
 )
 
+// bundleDownloadError marks a failure to FETCH the signature bundle (transport /
+// HTTP status), as opposed to a failure to VERIFY a fetched bundle. The former is
+// a retryable network problem; the latter is a non-retryable integrity failure.
+// It carries the underlying error so the caller can classify it by status.
+type bundleDownloadError struct{ err error }
+
+func (e *bundleDownloadError) Error() string { return e.err.Error() }
+func (e *bundleDownloadError) Unwrap() error { return e.err }
+
+func asBundleDownloadError(err error) (*bundleDownloadError, bool) {
+	var de *bundleDownloadError
+	if errors.As(err, &de) {
+		return de, true
+	}
+	return nil, false
+}
+
 // verifyUpdateChecksumSignature enforces a mandatory, in-process Sigstore
-// signature check on checksums.txt. There is no skip path.
+// signature check on checksums.txt. There is no skip path. A missing bundle in
+// the release is an integrity failure (we refuse unsigned releases); a failure
+// to DOWNLOAD an existing bundle is a transient network failure, surfaced via
+// bundleDownloadError so the caller does not misclassify a flaky download as a
+// forged release.
 func verifyUpdateChecksumSignature(ctx context.Context, checksumPath, bundleURL, tmpDir string) (string, error) {
 	if strings.TrimSpace(bundleURL) == "" {
 		return "missing", errors.New("release does not include checksums.txt.sigstore.json; refusing to install an unsigned release")
 	}
 	bundlePath := filepath.Join(tmpDir, "checksums.txt.sigstore.json")
 	if err := downloadUpdateFile(ctx, bundleURL, bundlePath); err != nil {
-		return "download_failed", fmt.Errorf("downloading checksum signature bundle: %w", err)
+		return "download_failed", &bundleDownloadError{err: fmt.Errorf("downloading checksum signature bundle: %w", err)}
 	}
 	if err := updateVerifySignature(checksumPath, bundlePath, updateSignerIdentityRegexp()); err != nil {
 		return "failed", err
@@ -228,7 +308,7 @@ func fetchBinaryRelease(ctx context.Context, targetVersion string) (*updateBinar
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("GET %s returned %d", url, resp.StatusCode)
+		return nil, &httpStatusError{statusCode: resp.StatusCode, url: url}
 	}
 	var rel updateBinaryRelease
 	if err := json.Unmarshal(data, &rel); err != nil {
@@ -290,7 +370,7 @@ func downloadUpdateFile(ctx context.Context, url, dest string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("GET %s returned %d", url, resp.StatusCode)
+		return &httpStatusError{statusCode: resp.StatusCode, url: url}
 	}
 	tmp := dest + ".part"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
@@ -435,60 +515,48 @@ func writeExtractedUpdateBinary(tmpDir, name string, r io.Reader) (string, error
 	return outPath, nil
 }
 
+// applyUpdateBinary atomically replaces the running executable with the freshly
+// extracted binary using the cross-platform rename trick: write a sibling
+// .<base>.new, move the in-use target aside to .<base>.old (allowed on Windows
+// even while the file is open/running), rename .new into place, and roll back
+// from .old on failure. There is no GOOS branch — Windows and Unix follow the
+// same path, so the swap completes in-process and the update is "installed"
+// immediately (no restart, no .cmd helper, no pending file).
 func applyUpdateBinary(src, dst string) (updateApplyResult, error) {
-	if runtime.GOOS == "windows" {
-		return scheduleWindowsBinaryReplace(src, dst)
+	target := dst
+	if resolved, err := filepath.EvalSymlinks(dst); err == nil {
+		target = resolved
 	}
 	mode := os.FileMode(0o755)
-	if st, err := os.Stat(dst); err == nil {
+	if st, err := os.Stat(target); err == nil {
 		mode = st.Mode().Perm()
 		if mode&0o111 == 0 {
 			mode |= 0o755
 		}
 	}
-	tmpName := fmt.Sprintf(".%s.update-%d", filepath.Base(dst), updateBinaryNow().UnixNano())
-	tmpPath := filepath.Join(filepath.Dir(dst), tmpName)
-	if err := updateCopyFile(src, tmpPath, mode); err != nil {
-		return updateApplyResult{}, err
-	}
-	if err := os.Rename(tmpPath, dst); err != nil {
-		_ = os.Remove(tmpPath)
-		return updateApplyResult{}, err
-	}
-	return updateApplyResult{Status: "installed", Path: dst}, nil
-}
+	dir := filepath.Dir(target)
+	base := filepath.Base(target)
+	newPath := filepath.Join(dir, "."+base+".new")
+	backupPath := filepath.Join(dir, "."+base+".old")
 
-func scheduleWindowsBinaryReplace(src, dst string) (updateApplyResult, error) {
-	pending := dst + ".new"
-	if err := updateCopyFile(src, pending, 0o755); err != nil {
+	_ = os.Remove(newPath)
+	if err := updateCopyFile(src, newPath, mode); err != nil {
 		return updateApplyResult{}, err
 	}
-	scriptPath := filepath.Join(os.TempDir(), fmt.Sprintf("wechat-mp-cli-update-%d.cmd", updateBinaryNow().UnixNano()))
-	script := strings.Join([]string{
-		"@echo off",
-		"setlocal",
-		"set \"PENDING=" + batchEscape(pending) + "\"",
-		"set \"TARGET=" + batchEscape(dst) + "\"",
-		"for /L %%I in (1,1,30) do (",
-		"  move /Y \"%PENDING%\" \"%TARGET%\" > nul 2>&1",
-		"  if not exist \"%PENDING%\" goto done",
-		"  ping 127.0.0.1 -n 2 > nul",
-		")",
-		":done",
-		"del \"%~f0\" > nul 2>&1",
-		"",
-	}, "\r\n")
-	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
-		return updateApplyResult{}, err
-	}
-	if err := exec.Command("cmd", "/C", "start", "", "/B", scriptPath).Start(); err != nil {
-		return updateApplyResult{}, err
-	}
-	return updateApplyResult{Status: "scheduled", Path: dst, PendingPath: pending}, nil
-}
 
-func batchEscape(s string) string {
-	return strings.NewReplacer("%", "%%", "^", "^^", "&", "^&", "<", "^<", ">", "^>", "|", "^|").Replace(s)
+	_ = os.Remove(backupPath)
+	if err := os.Rename(target, backupPath); err != nil {
+		_ = os.Remove(newPath)
+		return updateApplyResult{}, fmt.Errorf("preparing to replace %s: %w", target, err)
+	}
+	if err := os.Rename(newPath, target); err != nil {
+		_ = os.Rename(backupPath, target)
+		return updateApplyResult{}, fmt.Errorf("replacing %s: %w; original restored", target, err)
+	}
+	// On Windows the moved-aside .old may still be locked by the running process
+	// and refuse deletion; that's harmless, so ignore the error.
+	_ = os.Remove(backupPath)
+	return updateApplyResult{Status: "installed", Path: target}, nil
 }
 
 func updateCopyFile(src, dst string, mode os.FileMode) error {
@@ -509,6 +577,41 @@ func updateCopyFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	return os.Chmod(dst, mode)
+}
+
+// detectInstallMethod reports how this binary was installed so an agent gets an
+// honest install_method instead of a hardcoded "github-binary". wechat-mp-cli is
+// also distributed on npm via @fateforge/wechat-mp-cli + per-platform packages
+// (scripts/run.js execs the binary out of node_modules/.../bin), so a binary
+// running from a node_modules tree is an npm install, not a standalone GitHub
+// binary. An explicit WECHAT_MP_CLI_INSTALL_METHOD override wins (matches how the
+// fleet lets packagers declare the channel). Returns "npm" or "github-binary".
+func detectInstallMethod() string {
+	if m := strings.TrimSpace(updateGetenv("WECHAT_MP_CLI_INSTALL_METHOD")); m != "" {
+		return strings.ToLower(m)
+	}
+	exe, err := updateBinaryExecutable()
+	if err != nil {
+		return "github-binary"
+	}
+	if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
+		exe = resolved
+	}
+	normalized := filepath.ToSlash(strings.ToLower(exe))
+	if strings.Contains(normalized, "/node_modules/") && strings.Contains(normalized, "wechat-mp-cli") {
+		return "npm"
+	}
+	return "github-binary"
+}
+
+// updateManagerCommand returns the package-manager update command for a non
+// github-binary install, so the agent updates through the channel that owns the
+// binary instead of having the self-updater fight the package manager.
+func updateManagerCommand(method string) string {
+	if strings.ToLower(method) == "npm" {
+		return "npm install -g @fateforge/wechat-mp-cli@latest"
+	}
+	return ""
 }
 
 func updateSkillSyncCommand() string {

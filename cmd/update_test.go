@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -360,6 +361,215 @@ func TestUpdate_InterruptBeforeSwap(t *testing.T) {
 	}
 }
 
+// TestApplyUpdateBinary_RenameSwap exercises the real cross-platform rename
+// trick (no GOOS branch): the running target is replaced in place, the new
+// bytes land, the status is "installed" (never "scheduled"), and the .new/.old
+// scratch siblings are cleaned up. This is the in-process atomic swap that
+// replaced the old Windows .cmd defer mechanism.
+func TestApplyUpdateBinary_RenameSwap(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "wechat-mp-cli")
+	if err := os.WriteFile(dst, []byte("OLD-BINARY"), 0o755); err != nil {
+		t.Fatalf("seed target: %v", err)
+	}
+	src := filepath.Join(dir, "extracted-wechat-mp-cli")
+	if err := os.WriteFile(src, []byte("NEW-BINARY"), 0o755); err != nil {
+		t.Fatalf("seed src: %v", err)
+	}
+
+	res, err := applyUpdateBinary(src, dst)
+	if err != nil {
+		t.Fatalf("applyUpdateBinary: %v", err)
+	}
+	if res.Status != "installed" {
+		t.Fatalf("status = %q, want installed", res.Status)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(got) != "NEW-BINARY" {
+		t.Fatalf("target bytes = %q, want NEW-BINARY", got)
+	}
+	for _, scratch := range []string{
+		filepath.Join(dir, ".wechat-mp-cli.new"),
+		filepath.Join(dir, ".wechat-mp-cli.old"),
+	} {
+		if _, err := os.Stat(scratch); !os.IsNotExist(err) {
+			t.Fatalf("scratch file %s should be cleaned up, stat err = %v", scratch, err)
+		}
+	}
+}
+
+// TestUpdate_BundleDownloadFailureIsRetryable proves Fix #1: when the signature
+// BUNDLE itself cannot be downloaded (transport/HTTP failure), that is a
+// transient network problem at the download stage — NOT a non-retryable
+// E_INTEGRITY forged-release verdict. The release advertises a bundle asset, but
+// the bundle URL 500s; the verify-signature stub never runs.
+func TestUpdate_BundleDownloadFailureIsRetryable(t *testing.T) {
+	restore := stubUpdateSeams(t)
+	defer restore()
+	// If this stub were reached, the test would wrongly pass as integrity; make
+	// it loudly wrong so a regression that routes here is visible.
+	updateVerifySignature = func(_, _, _ string) error {
+		t.Fatalf("verify must not run when the bundle download itself fails")
+		return nil
+	}
+
+	srv := newUpdateReleaseServer(t)
+	defer srv.close()
+	// Make only the bundle endpoint fail with a 5xx.
+	srv.bundleStatus = http.StatusInternalServerError
+
+	origAPI := updateBinaryGitHubAPI
+	origClient := updateBinaryHTTPClient
+	updateBinaryGitHubAPI = srv.api
+	updateBinaryHTTPClient = srv.client
+	defer func() { updateBinaryGitHubAPI = origAPI; updateBinaryHTTPClient = origClient }()
+
+	env, exit := runUpdateCapture(t, "update")
+	e := envError(t, env)
+	if e["code"] == "E_INTEGRITY" {
+		t.Fatalf("bundle DOWNLOAD failure must not be E_INTEGRITY: %v", e)
+	}
+	if e["code"] != "E_SERVER" {
+		t.Fatalf("bundle download 5xx code = %v, want E_SERVER", e["code"])
+	}
+	if e["retryable"] != true {
+		t.Fatalf("bundle download failure must be retryable: %v", e)
+	}
+	if exit != ExitRetryable {
+		t.Fatalf("bundle download 5xx exit = %d, want %d", exit, ExitRetryable)
+	}
+	details, _ := e["details"].(map[string]any)
+	if details["stage"] != "download" {
+		t.Fatalf("bundle download failure stage = %v, want download", details["stage"])
+	}
+	if details["binary_replaced"] != false {
+		t.Fatalf("download-stage failure must leave binary untouched: %v", details)
+	}
+}
+
+// TestUpdate_DiscoverHTTPStatusClassification proves Fix #2: a discover-stage
+// HTTP failure is mapped by STATUS, not collapsed into E_NETWORK. A 404 (e.g. an
+// unknown --target-version) is non-retryable E_NOT_FOUND; a 429 is retryable
+// E_RATE_LIMITED; a 5xx is retryable E_SERVER.
+func TestUpdate_DiscoverHTTPStatusClassification(t *testing.T) {
+	cases := []struct {
+		name      string
+		status    int
+		wantCode  string
+		wantExit  int
+		wantRetry bool
+	}{
+		{"not_found", http.StatusNotFound, "E_NOT_FOUND", ExitNotFound, false},
+		{"rate_limited", http.StatusTooManyRequests, "E_RATE_LIMITED", ExitRetryable, true},
+		{"server_5xx", http.StatusBadGateway, "E_SERVER", ExitRetryable, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			origExe := updateBinaryExecutable
+			updateBinaryExecutable = func() (string, error) { return "/tmp/wechat-mp-cli", nil }
+			defer func() { updateBinaryExecutable = origExe }()
+
+			mux := http.NewServeMux()
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+			mux.HandleFunc("/repos/", func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "boom", tc.status)
+			})
+
+			origAPI := updateBinaryGitHubAPI
+			origClient := updateBinaryHTTPClient
+			updateBinaryGitHubAPI = srv.URL
+			updateBinaryHTTPClient = srv.Client()
+			defer func() { updateBinaryGitHubAPI = origAPI; updateBinaryHTTPClient = origClient }()
+
+			env, exit := runUpdateCapture(t, "update")
+			e := envError(t, env)
+			if e["code"] != tc.wantCode {
+				t.Fatalf("discover %d code = %v, want %v", tc.status, e["code"], tc.wantCode)
+			}
+			if exit != tc.wantExit {
+				t.Fatalf("discover %d exit = %d, want %d", tc.status, exit, tc.wantExit)
+			}
+			if e["retryable"] != tc.wantRetry {
+				t.Fatalf("discover %d retryable = %v, want %v", tc.status, e["retryable"], tc.wantRetry)
+			}
+			details, _ := e["details"].(map[string]any)
+			if details["stage"] != "discover" {
+				t.Fatalf("discover %d stage = %v, want discover", tc.status, details["stage"])
+			}
+		})
+	}
+}
+
+// TestDetectInstallMethod proves Fix #3: the install method is probed from the
+// real executable path / env override, not hardcoded. A binary running out of a
+// node_modules tree is npm; otherwise github-binary; an explicit env override
+// wins.
+func TestDetectInstallMethod(t *testing.T) {
+	origExe := updateBinaryExecutable
+	origEnv := updateGetenv
+	defer func() { updateBinaryExecutable = origExe; updateGetenv = origEnv }()
+
+	cases := []struct {
+		name string
+		exe  string
+		env  string
+		want string
+	}{
+		{"npm_node_modules", "/home/u/.npm/lib/node_modules/@fateforge/wechat-mp-cli-linux-x64/bin/wechat-mp-cli", "", "npm"},
+		{"github_binary", "/usr/local/bin/wechat-mp-cli", "", "github-binary"},
+		{"env_override_wins", "/home/u/node_modules/@fateforge/wechat-mp-cli-linux-x64/bin/wechat-mp-cli", "homebrew", "homebrew"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updateBinaryExecutable = func() (string, error) { return tc.exe, nil }
+			updateGetenv = func(k string) string {
+				if k == "WECHAT_MP_CLI_INSTALL_METHOD" {
+					return tc.env
+				}
+				return ""
+			}
+			if got := detectInstallMethod(); got != tc.want {
+				t.Fatalf("detectInstallMethod() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUpdateCheck_InstallMethodNpm proves Fix #3 surfaces through `update
+// --check`: an npm-installed binary reports install_method=npm and a
+// manager_command, not a hardcoded github-binary.
+func TestUpdateCheck_InstallMethodNpm(t *testing.T) {
+	restore := stubUpdateSeams(t)
+	defer restore()
+	updateBinaryExecutable = func() (string, error) {
+		return "/home/u/node_modules/@fateforge/wechat-mp-cli-linux-x64/bin/wechat-mp-cli", nil
+	}
+
+	srv := newUpdateReleaseServer(t)
+	defer srv.close()
+	origAPI := updateBinaryGitHubAPI
+	origClient := updateBinaryHTTPClient
+	updateBinaryGitHubAPI = srv.api
+	updateBinaryHTTPClient = srv.client
+	defer func() { updateBinaryGitHubAPI = origAPI; updateBinaryHTTPClient = origClient }()
+
+	env, exit := runUpdateCapture(t, "update", "--check")
+	if exit != ExitOK {
+		t.Fatalf("update --check exit = %d, want 0", exit)
+	}
+	data := envData(t, env)
+	if data["install_method"] != "npm" {
+		t.Fatalf("install_method = %v, want npm", data["install_method"])
+	}
+	if !strings.Contains(toStr(data["manager_command"]), "npm install -g @fateforge/wechat-mp-cli") {
+		t.Fatalf("npm install should carry manager_command: %v", data["manager_command"])
+	}
+}
+
 func toStr(v any) string {
 	s, _ := v.(string)
 	return s
@@ -371,10 +581,11 @@ func toStr(v any) string {
 // regardless of the host OS; the signature verify itself is stubbed by the
 // caller, but the SHA256 checksum is computed for real.
 type updateReleaseServer struct {
-	srv         *httptest.Server
-	api         string
-	client      *http.Client
-	restorePlat func()
+	srv          *httptest.Server
+	api          string
+	client       *http.Client
+	restorePlat  func()
+	bundleStatus int // when non-zero, the bundle endpoint returns this status
 }
 
 func (s *updateReleaseServer) close() {
@@ -394,6 +605,7 @@ func newUpdateReleaseServer(t *testing.T) *updateReleaseServer {
 
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
+	rs := &updateReleaseServer{}
 
 	mux.HandleFunc("/repos/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -418,18 +630,21 @@ func newUpdateReleaseServer(t *testing.T) *updateReleaseServer {
 		_, _ = io.WriteString(w, checksums)
 	})
 	mux.HandleFunc("/dl/bundle.json", func(w http.ResponseWriter, _ *http.Request) {
+		if rs.bundleStatus != 0 {
+			http.Error(w, "bundle unavailable", rs.bundleStatus)
+			return
+		}
 		_, _ = io.WriteString(w, `{"bundle":"stub"}`)
 	})
 
 	origPlat := updateBinaryPlatform
 	updateBinaryPlatform = func() (string, string) { return "linux", "amd64" }
 
-	return &updateReleaseServer{
-		srv:         srv,
-		api:         srv.URL,
-		client:      srv.Client(),
-		restorePlat: func() { updateBinaryPlatform = origPlat },
-	}
+	rs.srv = srv
+	rs.api = srv.URL
+	rs.client = srv.Client()
+	rs.restorePlat = func() { updateBinaryPlatform = origPlat }
+	return rs
 }
 
 func buildUpdateTarGz(t *testing.T, name string, content []byte) []byte {

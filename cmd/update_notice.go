@@ -67,8 +67,6 @@ func updateNoticesFromRelease(currentVersion, latestVersion, releaseURL, checked
 //   - "warning" when any version in the delta has a non-empty Security category,
 //     OR latest's major > current's major;
 //   - "info" otherwise.
-//
-// "critical" is reserved and never emitted here.
 func changelogDeltaSeverity(currentVersion, latestVersion string) string {
 	return severityFromDelta(project.ChangelogMarkdown, currentVersion, latestVersion)
 }
