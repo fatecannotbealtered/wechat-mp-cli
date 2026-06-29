@@ -283,7 +283,12 @@ func verifyUpdateChecksumSignature(ctx context.Context, checksumPath, bundleURL,
 	if err := downloadUpdateFile(ctx, bundleURL, bundlePath); err != nil {
 		return "download_failed", &bundleDownloadError{err: fmt.Errorf("downloading checksum signature bundle: %w", err)}
 	}
-	if err := updateVerifySignature(checksumPath, bundlePath, updateSignerIdentityRegexp()); err != nil {
+	if err := updateVerifySignature(ctx, checksumPath, bundlePath, updateSignerIdentityRegexp()); err != nil {
+		if errors.Is(err, errTrustRootUnavailable) {
+			// Refreshing the TUF trust metadata is a network step, not a signature
+			// verdict: surface as retryable network, not E_INTEGRITY.
+			return "trust_root_unavailable", &bundleDownloadError{err: err}
+		}
 		return "failed", err
 	}
 	return "verified", nil

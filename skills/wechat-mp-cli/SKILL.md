@@ -1,10 +1,10 @@
 ---
 name: wechat-mp-cli
-version: "1.0.9"
+version: "1.0.10"
 description: "Use wechat-mp-cli when the user needs to configure, draft, upload assets for, or publish WeChat Official Account content through a stable AI-native CLI contract."
 license: MIT
 user-invocable: true
-metadata: {"requires":{"bins":["wechat-mp-cli"],"min_version":"1.0.9"}}
+metadata: {"requires":{"bins":["wechat-mp-cli"],"min_version":"1.0.10"}}
 ---
 
 # wechat-mp-cli

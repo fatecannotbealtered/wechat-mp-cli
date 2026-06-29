@@ -31,6 +31,14 @@ func readCachedUpdateNotices() []any {
 	if !ok {
 		return nil
 	}
+	// Version-aware: suppress a stale "update available" notice once the running
+	// binary is already at (or past) the cached latest version — e.g. right after
+	// a successful update, before the 24h cache TTL lapses.
+	if latest, _ := notice["latest_version"].(string); latest != "" {
+		if cmp, ok := compareVersions(latest, version); ok && cmp <= 0 {
+			return nil
+		}
+	}
 	return []any{notice}
 }
 

@@ -88,7 +88,7 @@ func stubUpdateSeams(t *testing.T) func() {
 		return updateApplyResult{Status: "installed", Path: dst}, nil
 	}
 	updateSkillSync = func(_ context.Context, _ string) error { return nil }
-	updateVerifySignature = func(_, _, _ string) error { return nil }
+	updateVerifySignature = func(_ context.Context, _, _, _ string) error { return nil }
 	return func() {
 		updateBinaryExecutable = origExe
 		updateBinaryApply = origApply
@@ -156,7 +156,7 @@ func TestUpdate_IntegrityFailureNonRetryable(t *testing.T) {
 	restore := stubUpdateSeams(t)
 	defer restore()
 	// Force the binary update to fail at verify_signature.
-	updateVerifySignature = func(_, _, _ string) error { return errors.New("certificate identity mismatch") }
+	updateVerifySignature = func(_ context.Context, _, _, _ string) error { return errors.New("certificate identity mismatch") }
 
 	srv := newUpdateReleaseServer(t)
 	defer srv.close()
@@ -414,7 +414,7 @@ func TestUpdate_BundleDownloadFailureIsRetryable(t *testing.T) {
 	defer restore()
 	// If this stub were reached, the test would wrongly pass as integrity; make
 	// it loudly wrong so a regression that routes here is visible.
-	updateVerifySignature = func(_, _, _ string) error {
+	updateVerifySignature = func(_ context.Context, _, _, _ string) error {
 		t.Fatalf("verify must not run when the bundle download itself fails")
 		return nil
 	}
