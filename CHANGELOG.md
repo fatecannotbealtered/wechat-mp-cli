@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `google.golang.org/grpc` up to 1.82.1 and clears GO-2026-6061.
 - Bump `golang.org/x/image` to 0.45.0, clearing two reachable findings in the
   BMP/TIFF/WebP decoders that `internal/images` registers for media upload.
+- CI now runs `govulncheck ./...` in the Lint job, fail-closed. SEC-SPEC §5 was
+  tightened to require a dependency audit for every ecosystem a tool ships in;
+  this one ships as a Go binary and an npm wrapper, and only the wrapper was
+  ever audited, so the Go module's own dependencies went unscanned.
+
+### Changed
+
+- Sync the vendored spec to `ai-native-cli-spec@v1.6.0`. Besides the audit rule
+  above, CLI-SPEC §14 now states the `update` final-state contract explicitly:
+  the idempotent no-op check runs before any package-manager command, and both
+  successful and no-op results report `current_version == target_version` with
+  `update_available: false`.
 
 ## [1.0.11] - 2026-07-02
 
