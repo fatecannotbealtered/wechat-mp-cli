@@ -69,6 +69,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `target_version` now, so `current_version == target_version` holds as §14
   requires. Covered by `TestUpdate_NPMDrive_NoOpDoesNotInstall`, which fails
   against the old code.
+- **`update --target-version <older>` downgrades again instead of reporting a
+  no-op.** Both update paths asked `compareVersions(current, resolved) >= 0`,
+  which conflates "already on that version" with "running something newer".
+  With no version requested the target is whatever `latest` resolves to and
+  being ahead of it really is nothing to do; but `--target-version` names an
+  exact version to install, so asking for an earlier one is a downgrade the
+  caller meant. The binary path had always swallowed it this way; the npm path
+  did not until the no-op check above was added to it. Both now share
+  `updateIsNoOp`, which only treats an explicitly requested version as a no-op
+  when it equals the running one.
 
 ## [1.0.11] - 2026-07-02
 

@@ -88,7 +88,7 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		if resolved == "" {
 			resolved = normalizeVersion(rel.TagName)
 		}
-		if cmp, ok := compareVersions(version, resolved); ok && cmp >= 0 {
+		if updateIsNoOp(version, resolved, target != "") {
 			return printData(map[string]any{
 				"status":             "noop",
 				"previous_version":   version,
@@ -276,6 +276,27 @@ func reportUpdateInterrupted(stage, currentVersion string, binaryReplaced bool, 
 	return failWithDetails(0, output.ErrInterrupted, msg, details, true)
 }
 
+// updateIsNoOp reports whether installing resolved would change nothing.
+//
+// An explicitly requested version is a no-op ONLY when it equals the running
+// one: --target-version names an exact version to install, so asking for an
+// older one is a downgrade the user meant, not a no-op to skip. With no version
+// requested the target is whatever the latest release resolves to, and running
+// something at or past it is likewise nothing to do.
+//
+// Both callers used `cmp >= 0`, which conflated the two and made an explicit
+// downgrade silently report "noop" without installing anything.
+func updateIsNoOp(current, resolved string, explicit bool) bool {
+	cmp, ok := compareVersions(current, resolved)
+	if !ok {
+		return false
+	}
+	if explicit {
+		return cmp == 0
+	}
+	return cmp >= 0
+}
+
 // runNPMUpdate drives npm to install the target version on behalf of the user.
 // --dry-run previews the command and exits 0; a live run executes it via
 // updateRunPackageManager (testable seam), then syncs the Skill.
@@ -311,7 +332,7 @@ func runNPMUpdate(ctx context.Context, target, skillCommand string) error {
 		if resolved == "" {
 			resolved = normalizeVersion(rel.TagName)
 		}
-		if cmp, ok := compareVersions(version, resolved); ok && cmp >= 0 {
+		if updateIsNoOp(version, resolved, target != "") {
 			return printData(map[string]any{
 				"status":             "noop",
 				"previous_version":   version,

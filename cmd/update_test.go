@@ -856,3 +856,33 @@ func TestUpdate_NPMDrive_NoOpDoesNotInstall(t *testing.T) {
 		t.Errorf("install_method = %v, want npm", data["install_method"])
 	}
 }
+
+// TestUpdateIsNoOp pins the difference between "already there" and "you asked
+// for an older one". --target-version names an exact version to install, so a
+// request for an earlier release is a downgrade the caller meant; only an
+// unrequested target ("latest") may treat being ahead as nothing to do.
+func TestUpdateIsNoOp(t *testing.T) {
+	cases := []struct {
+		name     string
+		current  string
+		resolved string
+		explicit bool
+		want     bool
+	}{
+		{"explicit same version is a no-op", "1.2.3", "1.2.3", true, true},
+		{"explicit newer version installs", "1.2.3", "1.3.0", true, false},
+		{"explicit older version downgrades, not a no-op", "2.0.0", "1.2.3", true, false},
+		{"latest resolves to the same version", "1.2.3", "1.2.3", false, true},
+		{"latest is newer", "1.2.3", "1.3.0", false, false},
+		{"running ahead of latest is a no-op", "2.0.0", "1.2.3", false, true},
+		{"unparseable version is never a no-op", "dev", "1.2.3", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := updateIsNoOp(tc.current, tc.resolved, tc.explicit); got != tc.want {
+				t.Errorf("updateIsNoOp(%q, %q, explicit=%v) = %v, want %v",
+					tc.current, tc.resolved, tc.explicit, got, tc.want)
+			}
+		})
+	}
+}
