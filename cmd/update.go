@@ -93,6 +93,7 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 				"status":             "noop",
 				"previous_version":   version,
 				"current_version":    version,
+				"target_version":     resolved,
 				"binary_replaced":    false,
 				"update_available":   false,
 				"skill_sync_status":  "skipped",
@@ -297,6 +298,33 @@ func runNPMUpdate(ctx context.Context, target, skillCommand string) error {
 			"command":            npmCmd,
 			"skill_sync_command": skillCommand,
 		})
+	}
+
+	// Idempotent: the no-op check runs BEFORE npm, so an already-current install
+	// never shells out (CLI-SPEC §14). The binary path below has always done
+	// this; the npm path did not, so `update` on a current npm install ran
+	// `npm install -g ...@latest` every time -- slow, noisy, and able to fail
+	// for reasons that have nothing to do with the update (registry auth,
+	// offline, EACCES), turning a guaranteed no-op into an error envelope.
+	if rel, derr := fetchBinaryRelease(ctx, target); derr == nil {
+		resolved := target
+		if resolved == "" {
+			resolved = normalizeVersion(rel.TagName)
+		}
+		if cmp, ok := compareVersions(version, resolved); ok && cmp >= 0 {
+			return printData(map[string]any{
+				"status":             "noop",
+				"previous_version":   version,
+				"current_version":    version,
+				"target_version":     resolved,
+				"update_available":   false,
+				"binary_replaced":    false,
+				"install_method":     "npm",
+				"command":            npmCmd,
+				"skill_sync_status":  "skipped",
+				"skill_sync_command": skillCommand,
+			})
+		}
 	}
 
 	if err := updateRunPackageManager(ctx, "npm", resolvedTarget); err != nil {

@@ -788,3 +788,71 @@ func buildUpdateTarGz(t *testing.T, name string, content []byte) []byte {
 	}
 	return buf.Bytes()
 }
+
+// TestUpdate_NPMDrive_NoOpDoesNotInstall pins the idempotent no-op check to a
+// position BEFORE the package manager (CLI-SPEC §14): an install already on the
+// target version must not shell out to npm at all.
+//
+// This is a regression test for a real gap. runUpdate routes npm-managed
+// installs into runNPMUpdate before reaching the binary path's version
+// comparison, and runNPMUpdate had none of its own -- so a bare `update` on a
+// current npm install ran `npm install -g ...@latest` every single time. That
+// is slow and noisy at best, and at worst turns a guaranteed no-op into an
+// error envelope when npm fails for an unrelated reason (registry auth,
+// offline, EACCES).
+func TestUpdate_NPMDrive_NoOpDoesNotInstall(t *testing.T) {
+	restore := stubUpdateSeams(t)
+	defer restore()
+
+	origVersion := version
+	origExe := updateBinaryExecutable
+	origPM := updateRunPackageManager
+	// The fake release server serves v9.9.9; claim to be running it already.
+	version = "9.9.9"
+	updateBinaryExecutable = func() (string, error) {
+		return "/home/u/node_modules/@fateforge/wechat-mp-cli-linux-x64/bin/wechat-mp-cli", nil
+	}
+	updateRunPackageManager = func(context.Context, string, string) error {
+		t.Error("an already-current install must not run the package manager")
+		return nil
+	}
+	defer func() {
+		version = origVersion
+		updateBinaryExecutable = origExe
+		updateRunPackageManager = origPM
+	}()
+
+	srv := newUpdateReleaseServer(t)
+	defer srv.close()
+	origAPI := updateBinaryGitHubAPI
+	origClient := updateBinaryHTTPClient
+	updateBinaryGitHubAPI = srv.api
+	updateBinaryHTTPClient = srv.client
+	defer func() { updateBinaryGitHubAPI = origAPI; updateBinaryHTTPClient = origClient }()
+
+	env, exit := runUpdateCapture(t, "update")
+	if ok, _ := env["ok"].(bool); !ok {
+		t.Fatalf("a no-op update must be ok:true: %v", env)
+	}
+	if exit != ExitOK {
+		t.Fatalf("no-op exit = %d, want 0", exit)
+	}
+	data := envData(t, env)
+	if status, _ := data["status"].(string); status != "noop" {
+		t.Errorf("status = %v, want noop", data["status"])
+	}
+	// CLI-SPEC §14: a no-op result reports the final state, not the comparison
+	// that led to it.
+	if available, _ := data["update_available"].(bool); available {
+		t.Errorf("update_available = true while already on the target version")
+	}
+	if data["current_version"] != data["target_version"] {
+		t.Errorf("current_version %v != target_version %v", data["current_version"], data["target_version"])
+	}
+	if replaced, _ := data["binary_replaced"].(bool); replaced {
+		t.Errorf("binary_replaced = true for a no-op")
+	}
+	if data["install_method"] != "npm" {
+		t.Errorf("install_method = %v, want npm", data["install_method"])
+	}
+}
